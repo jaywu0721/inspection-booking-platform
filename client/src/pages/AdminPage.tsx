@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { redirectToAdminDashboardAfterLogin } from "@/lib/adminRedirect";
+import { buildCompanyFormFromRecord, createEmptyCompanyForm } from "@/lib/companyEditor";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,20 +40,7 @@ function parseFaq(text: string) {
 export default function AdminPage() {
   const utils = trpc.useUtils();
   const [credentials, setCredentials] = useState({ username: "", password: "" });
-  const [companyForm, setCompanyForm] = useState({
-    slug: "",
-    name: "",
-    logoUrl: "",
-    contactPhone: "",
-    contactEmail: "",
-    heroTitle: "",
-    heroDescription: "",
-    inspectionFlow: "",
-    handoverFlow: "",
-    precautions: "",
-    faqText: "預約方式 | 先驗證戶號與手機後再選時段",
-    contactWindow: "",
-  });
+  const [companyForm, setCompanyForm] = useState(createEmptyCompanyForm());
   const [projectForm, setProjectForm] = useState({
     companyId: "",
     slug: "",
@@ -142,20 +130,7 @@ export default function AdminPage() {
     onSuccess: async () => {
       toast.success("公司資料已儲存");
       await refreshAll();
-      setCompanyForm({
-        slug: "",
-        name: "",
-        logoUrl: "",
-        contactPhone: "",
-        contactEmail: "",
-        heroTitle: "",
-        heroDescription: "",
-        inspectionFlow: "",
-        handoverFlow: "",
-        precautions: "",
-        faqText: "預約方式 | 先驗證戶號與手機後再選時段",
-        contactWindow: "",
-      });
+      setCompanyForm(createEmptyCompanyForm());
     },
     onError: error => toast.error(error.message),
   });
@@ -205,6 +180,14 @@ export default function AdminPage() {
   });
 
   const projectOptions = useMemo(() => projects.map(project => ({ value: String(project.id), label: project.name })), [projects]);
+
+  const startEditingCompany = (company: typeof companies[number]) => {
+    setCompanyForm(buildCompanyFormFromRecord(company));
+  };
+
+  const cancelEditingCompany = () => {
+    setCompanyForm(createEmptyCompanyForm());
+  };
 
   if (adminProfile.isLoading) {
     return (
@@ -315,7 +298,7 @@ export default function AdminPage() {
                     <CardDescription>流程、FAQ、注意事項全部掛在公司層級。這樣做的好處是新建案可直接繼承；風險是內容更新會影響同公司所有建案，所以你要有版本意識。</CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2"><Label>公司代號 slug</Label><Input value={companyForm.slug} onChange={event => setCompanyForm(current => ({ ...current, slug: event.target.value }))} placeholder="例如 yisin" /></div>
+                    <div className="space-y-2"><Label>公司代號 slug</Label><Input value={companyForm.slug} onChange={event => setCompanyForm(current => ({ ...current, slug: event.target.value }))} placeholder="例如 yisin" disabled={Boolean(companyForm.id)} /></div>
                     <div className="space-y-2"><Label>公司名稱</Label><Input value={companyForm.name} onChange={event => setCompanyForm(current => ({ ...current, name: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>Logo URL</Label><Input value={companyForm.logoUrl} onChange={event => setCompanyForm(current => ({ ...current, logoUrl: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>聯絡電話</Label><Input value={companyForm.contactPhone} onChange={event => setCompanyForm(current => ({ ...current, contactPhone: event.target.value }))} /></div>
@@ -327,7 +310,7 @@ export default function AdminPage() {
                     <div className="space-y-2 md:col-span-2"><Label>注意事項</Label><Textarea value={companyForm.precautions} onChange={event => setCompanyForm(current => ({ ...current, precautions: event.target.value }))} className="min-h-24" /></div>
                     <div className="space-y-2 md:col-span-2"><Label>FAQ（每行格式：問題 | 回答）</Label><Textarea value={companyForm.faqText} onChange={event => setCompanyForm(current => ({ ...current, faqText: event.target.value }))} className="min-h-28" /></div>
                     <div className="space-y-2 md:col-span-2"><Label>聯絡窗口說明</Label><Textarea value={companyForm.contactWindow} onChange={event => setCompanyForm(current => ({ ...current, contactWindow: event.target.value }))} className="min-h-24" /></div>
-                    <div className="md:col-span-2"><Button onClick={() => companyMutation.mutate({ ...companyForm, faqItems: parseFaq(companyForm.faqText) })} disabled={companyMutation.isPending}>{companyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}儲存公司資料</Button></div>
+                    <div className="md:col-span-2 flex flex-wrap gap-3"><Button onClick={() => companyMutation.mutate({ ...companyForm, id: companyForm.id ? Number(companyForm.id) : undefined, faqItems: parseFaq(companyForm.faqText) })} disabled={companyMutation.isPending}>{companyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{companyForm.id ? "更新公司資料" : "儲存公司資料"}</Button>{companyForm.id ? <Button variant="outline" onClick={cancelEditingCompany} disabled={companyMutation.isPending}>取消編輯</Button> : null}</div>
                   </CardContent>
                 </Card>
 
@@ -335,10 +318,16 @@ export default function AdminPage() {
                   <CardHeader><CardTitle>既有公司</CardTitle></CardHeader>
                   <CardContent className="overflow-x-auto">
                     <Table>
-                      <TableHeader><TableRow><TableHead>公司</TableHead><TableHead>Slug</TableHead><TableHead>聯絡方式</TableHead><TableHead>最後更新</TableHead></TableRow></TableHeader>
+                      <TableHeader><TableRow><TableHead>公司</TableHead><TableHead>Slug</TableHead><TableHead>聯絡方式</TableHead><TableHead>最後更新</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
                       <TableBody>
                         {companies.map(company => (
-                          <TableRow key={company.id}><TableCell>{company.name}</TableCell><TableCell>{company.slug}</TableCell><TableCell>{company.contactPhone}</TableCell><TableCell>{formatDateTime(company.updatedAt)}</TableCell></TableRow>
+                          <TableRow key={company.id}>
+                            <TableCell>{company.name}</TableCell>
+                            <TableCell>{company.slug}</TableCell>
+                            <TableCell>{company.contactPhone}</TableCell>
+                            <TableCell>{formatDateTime(company.updatedAt)}</TableCell>
+                            <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => startEditingCompany(company)}>編輯</Button></TableCell>
+                          </TableRow>
                         ))}
                       </TableBody>
                     </Table>
