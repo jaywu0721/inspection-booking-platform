@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { redirectToAdminDashboardAfterLogin } from "@/lib/adminRedirect";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -116,10 +117,8 @@ export default function AdminPage() {
 
   const loginMutation = trpc.adminAuth.login.useMutation({
     onSuccess: async () => {
-      toast.success("管理員登入成功");
-      await adminProfile.refetch();
-      await dashboardQuery.refetch();
-      await bookingQuery.refetch();
+      toast.success("管理員登入成功，正在進入後台管理...");
+      await redirectToAdminDashboardAfterLogin(utils);
     },
     onError: error => toast.error(error.message),
   });
