@@ -114,7 +114,19 @@ export const appRouter = router({
   }),
   admin: router({
     dashboard: publicProcedure.query(({ ctx }) => {
-      requireAdmin(ctx.req.headers);
+      const cookieHeader = typeof ctx.req.headers.cookie === "string" ? ctx.req.headers.cookie : undefined;
+      const session = getAdminSessionFromHeader(cookieHeader);
+      if (!session) {
+        return {
+          companies: [],
+          projects: [],
+          residents: [],
+          links: [],
+          slots: [],
+          bookings: [],
+          reschedules: [],
+        };
+      }
       return getAdminDashboardData();
     }),
     saveCompany: publicProcedure
@@ -219,7 +231,11 @@ export const appRouter = router({
         })
       )
       .query(({ ctx, input }) => {
-        requireAdmin(ctx.req.headers);
+        const cookieHeader = typeof ctx.req.headers.cookie === "string" ? ctx.req.headers.cookie : undefined;
+        const session = getAdminSessionFromHeader(cookieHeader);
+        if (!session) {
+          return [];
+        }
         return searchBookings(input);
       }),
     rescheduleBooking: publicProcedure
