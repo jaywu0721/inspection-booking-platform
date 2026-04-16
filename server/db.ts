@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, like, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   adminCredentials,
@@ -574,21 +574,28 @@ export async function upsertResidentRecord(input: Omit<InsertResident, "createdA
   return Number(inserted[0].insertId);
 }
 
+async function deleteReschedulesByBookingIds(tx: { delete: (table: typeof bookingReschedules) => { where: (condition: ReturnType<typeof inArray>) => Promise<unknown> } }, bookingIds: number[]) {
+  if (!bookingIds.length) return;
+  await tx.delete(bookingReschedules).where(inArray(bookingReschedules.bookingId, bookingIds));
+}
+
 export async function deleteCompanyRecord(companyId: number) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
-  const [projectUsage] = await db.select({ used: count(projects.id) }).from(projects).where(eq(projects.companyId, companyId));
-  const [residentUsage] = await db.select({ used: count(residents.id) }).from(residents).where(eq(residents.companyId, companyId));
-  const [linkUsage] = await db.select({ used: count(bookingLinks.id) }).from(bookingLinks).where(eq(bookingLinks.companyId, companyId));
-  const [slotUsage] = await db.select({ used: count(bookingSlots.id) }).from(bookingSlots).where(eq(bookingSlots.companyId, companyId));
-  const [bookingUsage] = await db.select({ used: count(bookings.id) }).from(bookings).where(eq(bookings.companyId, companyId));
+  await db.transaction(async tx => {
+    const companyBookingRows = await tx.select({ id: bookings.id }).from(bookings).where(eq(bookings.companyId, companyId));
+    const companyBookingIds = companyBookingRows.map(row => row.id);
 
-  if ((projectUsage?.used ?? 0) > 0 || (residentUsage?.used ?? 0) > 0 || (linkUsage?.used ?? 0) > 0 || (slotUsage?.used ?? 0) > 0 || (bookingUsage?.used ?? 0) > 0) {
-    throw new Error("此公司底下仍有建案、住戶、連結、時段或預約資料，請先清除下層資料再刪除公司");
-  }
+    await deleteReschedulesByBookingIds(tx, companyBookingIds);
+    await tx.delete(bookings).where(eq(bookings.companyId, companyId));
+    await tx.delete(bookingSlots).where(eq(bookingSlots.companyId, companyId));
+    await tx.delete(bookingLinks).where(eq(bookingLinks.companyId, companyId));
+    await tx.delete(residents).where(eq(residents.companyId, companyId));
+    await tx.delete(projects).where(eq(projects.companyId, companyId));
+    await tx.delete(companies).where(eq(companies.id, companyId));
+  });
 
-  await db.delete(companies).where(eq(companies.id, companyId));
   return companyId;
 }
 
@@ -596,16 +603,18 @@ export async function deleteProjectRecord(projectId: number) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
-  const [residentUsage] = await db.select({ used: count(residents.id) }).from(residents).where(eq(residents.projectId, projectId));
-  const [linkUsage] = await db.select({ used: count(bookingLinks.id) }).from(bookingLinks).where(eq(bookingLinks.projectId, projectId));
-  const [slotUsage] = await db.select({ used: count(bookingSlots.id) }).from(bookingSlots).where(eq(bookingSlots.projectId, projectId));
-  const [bookingUsage] = await db.select({ used: count(bookings.id) }).from(bookings).where(eq(bookings.projectId, projectId));
+  await db.transaction(async tx => {
+    const projectBookingRows = await tx.select({ id: bookings.id }).from(bookings).where(eq(bookings.projectId, projectId));
+    const projectBookingIds = projectBookingRows.map(row => row.id);
 
-  if ((residentUsage?.used ?? 0) > 0 || (linkUsage?.used ?? 0) > 0 || (slotUsage?.used ?? 0) > 0 || (bookingUsage?.used ?? 0) > 0) {
-    throw new Error("此建案底下仍有住戶、連結、時段或預約資料，請先清除下層資料再刪除建案");
-  }
+    await deleteReschedulesByBookingIds(tx, projectBookingIds);
+    await tx.delete(bookings).where(eq(bookings.projectId, projectId));
+    await tx.delete(bookingSlots).where(eq(bookingSlots.projectId, projectId));
+    await tx.delete(bookingLinks).where(eq(bookingLinks.projectId, projectId));
+    await tx.delete(residents).where(eq(residents.projectId, projectId));
+    await tx.delete(projects).where(eq(projects.id, projectId));
+  });
 
-  await db.delete(projects).where(eq(projects.id, projectId));
   return projectId;
 }
 
@@ -622,16 +631,39 @@ export async function deleteResidentRecord(residentId: number) {
   return residentId;
 }
 
+export async function deleteBookingLinkRecord(linkId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  await db.delete(bookingLinks).where(eq(bookingLinks.id, linkId));
+  return linkId;
+}
+
+export async function setBookingLinkEnabledRecord(input: { id: number; isEnabled: boolean; disabledReason?: string | null }) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  await db
+    .update(bookingLinks)
+    .set({
+      isEnabled: input.isEnabled,
+      disabledReason: input.isEnabled ? null : input.disabledReason ?? "此連結已由後台停止",
+    })
+    .where(eq(bookingLinks.id, input.id));
+
+  return input.id;
+}
+
 export async function upsertBookingLinkRecord(input: Omit<InsertBookingLink, "createdAt" | "updatedAt"> & { id?: number }) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
   if (input.id) {
-    await db.update(bookingLinks).set({ ...input, disabledReason: input.disabledReason ?? null }).where(eq(bookingLinks.id, input.id));
+    await db.update(bookingLinks).set({ ...input, disabledReason: input.isEnabled ? null : input.disabledReason ?? null }).where(eq(bookingLinks.id, input.id));
     return input.id;
   }
 
-  const inserted = await db.insert(bookingLinks).values({ ...input, disabledReason: input.disabledReason ?? null });
+  const inserted = await db.insert(bookingLinks).values({ ...input, disabledReason: input.isEnabled ? null : input.disabledReason ?? null });
   return Number(inserted[0].insertId);
 }
 

@@ -6,6 +6,7 @@ import {
   getDb,
   rescheduleBookingRecord,
   searchBookings,
+  setBookingLinkEnabledRecord,
   upsertBookingLinkRecord,
   upsertBookingSlotRecord,
   upsertCompanyRecord,
@@ -184,6 +185,22 @@ describe("booking flow integration", () => {
         hasInspectionCompany: false,
       })
     ).rejects.toThrow("該時段已額滿");
+
+    await setBookingLinkEnabledRecord({
+      id: initialLinkId,
+      isEnabled: false,
+      disabledReason: "後台手動停止初驗連結",
+    });
+
+    await expect(
+      verifyResidentForBooking({
+        companySlug,
+        projectSlug,
+        type: "initial",
+        unitNumber,
+        phoneNumber,
+      })
+    ).rejects.toThrow("此預約連結已截止");
 
     const expiredProjectSlug = `qa-expired-${suffix}`;
     const expiredProjectId = await upsertProjectRecord({

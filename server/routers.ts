@@ -10,6 +10,7 @@ import {
 } from "./adminAuth";
 import {
   createBookingRecord,
+  deleteBookingLinkRecord,
   deleteCompanyRecord,
   deleteProjectRecord,
   deleteResidentRecord,
@@ -18,6 +19,7 @@ import {
   getPublicSiteContext,
   rescheduleBookingRecord,
   searchBookings,
+  setBookingLinkEnabledRecord,
   upsertBookingLinkRecord,
   upsertBookingSlotRecord,
   upsertCompanyRecord,
@@ -207,6 +209,30 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         requireAdmin(ctx.req.headers);
         await deleteResidentRecord(input.id);
+        return { success: true } as const;
+      }),
+    deleteLink: publicProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        await deleteBookingLinkRecord(input.id);
+        return { success: true } as const;
+      }),
+    toggleLinkEnabled: publicProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          isEnabled: z.boolean(),
+          disabledReason: z.string().optional().or(z.literal("")),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        await setBookingLinkEnabledRecord({
+          id: input.id,
+          isEnabled: input.isEnabled,
+          disabledReason: input.disabledReason || null,
+        });
         return { success: true } as const;
       }),
     saveLink: publicProcedure

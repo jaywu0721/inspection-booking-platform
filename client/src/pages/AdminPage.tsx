@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, LockKeyhole, Building2, CalendarRange, ClipboardList, Users, ArrowRightLeft } from "lucide-react";
@@ -39,7 +39,27 @@ function parseFaq(text: string) {
     });
 }
 
+function formatDateTimeInput(value: string | number | Date) {
+  const date = new Date(value);
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function createEmptyLinkForm() {
+  return {
+    id: undefined as number | undefined,
+    companyId: "",
+    projectId: "",
+    type: "initial",
+    isEnabled: true,
+    startsAt: "",
+    endsAt: "",
+    disabledReason: "",
+  };
+}
+
 export default function AdminPage() {
+
   const utils = trpc.useUtils();
   const [credentials, setCredentials] = useState({ username: "", password: "" });
   const [companyForm, setCompanyForm] = useState(createEmptyCompanyForm());
@@ -57,15 +77,7 @@ export default function AdminPage() {
     phoneNumber: "",
     note: "",
   });
-  const [linkForm, setLinkForm] = useState({
-    companyId: "",
-    projectId: "",
-    type: "initial",
-    isEnabled: true,
-    startsAt: "",
-    endsAt: "",
-    disabledReason: "",
-  });
+  const [linkForm, setLinkForm] = useState(createEmptyLinkForm());
   const [slotForm, setSlotForm] = useState({
     companyId: "",
     projectId: "",
@@ -77,7 +89,7 @@ export default function AdminPage() {
   });
   const [bookingFilters, setBookingFilters] = useState({ projectId: "", unitNumber: "", bookingType: "all", status: "all" });
   const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", newSlotId: "", note: "" });
-  const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident"; id: number; label: string }>(null);
+  const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link"; id: number; label: string; step: 1 | 2 }>(null);
 
   const adminProfile = trpc.adminAuth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
   const dashboardQuery = trpc.admin.dashboard.useQuery(undefined, {
@@ -210,7 +222,28 @@ export default function AdminPage() {
     onError: error => toast.error(error.message),
   });
 
+  const linkDeleteMutation = trpc.admin.deleteLink.useMutation({
+    onSuccess: async () => {
+      toast.success("預約連結已刪除");
+      setDeleteTarget(null);
+      setLinkForm(createEmptyLinkForm());
+      await refreshAll();
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  const toggleLinkEnabledMutation = trpc.admin.toggleLinkEnabled.useMutation({
+    onSuccess: async (_data, variables) => {
+      toast.success(variables.isEnabled ? "預約連結已重新啟用" : "預約連結已停止");
+      await refreshAll();
+    },
+    onError: error => toast.error(error.message),
+  });
+
   const projectOptions = useMemo(() => projects.map(project => ({ value: String(project.id), label: project.name })), [projects]);
+  const projectNameById = useMemo(() => new Map(projects.map(project => [project.id, project.name])), [projects]);
+  const isDeleting = companyDeleteMutation.isPending || projectDeleteMutation.isPending || residentDeleteMutation.isPending || linkDeleteMutation.isPending;
+
 
   const startEditingCompany = (company: typeof companies[number]) => {
     setCompanyForm(buildCompanyFormFromRecord(company));
@@ -222,6 +255,23 @@ export default function AdminPage() {
 
   const applySlotPreset = (startLabel: string, endLabel: string) => {
     setSlotForm(current => ({ ...current, startLabel, endLabel }));
+  };
+
+  const startEditingLink = (link: typeof links[number]) => {
+    setLinkForm({
+      id: link.id,
+      companyId: String(link.companyId),
+      projectId: String(link.projectId),
+      type: link.type,
+      isEnabled: link.isEnabled,
+      startsAt: formatDateTimeInput(link.startsAt),
+      endsAt: formatDateTimeInput(link.endsAt),
+      disabledReason: link.disabledReason || "",
+    });
+  };
+
+  const cancelEditingLink = () => {
+    setLinkForm(createEmptyLinkForm());
   };
 
   const createPresetSlots = async () => {
@@ -246,6 +296,11 @@ export default function AdminPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
 
+    if (deleteTarget.step === 1) {
+      setDeleteTarget(current => (current ? { ...current, step: 2 } : current));
+      return;
+    }
+
     if (deleteTarget.type === "company") {
       await companyDeleteMutation.mutateAsync({ id: deleteTarget.id });
       return;
@@ -253,6 +308,11 @@ export default function AdminPage() {
 
     if (deleteTarget.type === "project") {
       await projectDeleteMutation.mutateAsync({ id: deleteTarget.id });
+      return;
+    }
+
+    if (deleteTarget.type === "link") {
+      await linkDeleteMutation.mutateAsync({ id: deleteTarget.id });
       return;
     }
 
@@ -397,7 +457,7 @@ export default function AdminPage() {
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
                                 <Button variant="outline" size="sm" onClick={() => startEditingCompany(company)}>編輯</Button>
-                                <Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "company", id: company.id, label: company.name })}>刪除</Button>
+                                <Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "company", id: company.id, label: company.name, step: 1 })}>刪除</Button>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -433,7 +493,7 @@ export default function AdminPage() {
                             <TableCell>{project.companyId}</TableCell>
                             <TableCell>{project.houseNumberExample}</TableCell>
                             <TableCell className="text-right">
-                              <Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "project", id: project.id, label: project.name })}>刪除</Button>
+                              <Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "project", id: project.id, label: project.name, step: 1 })}>刪除</Button>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -461,7 +521,7 @@ export default function AdminPage() {
                   <CardContent className="overflow-x-auto">
                     <Table>
                       <TableHeader><TableRow><TableHead>戶號</TableHead><TableHead>手機</TableHead><TableHead>建案 ID</TableHead><TableHead>備註</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
-                      <TableBody>{residents.map(resident => <TableRow key={resident.id}><TableCell>{resident.unitNumber}</TableCell><TableCell>{resident.phoneNumber}</TableCell><TableCell>{resident.projectId}</TableCell><TableCell>{resident.note || "-"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "resident", id: resident.id, label: resident.unitNumber })}>刪除</Button></TableCell></TableRow>)}</TableBody>
+                      <TableBody>{residents.map(resident => <TableRow key={resident.id}><TableCell>{resident.unitNumber}</TableCell><TableCell>{resident.phoneNumber}</TableCell><TableCell>{resident.projectId}</TableCell><TableCell>{resident.note || "-"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "resident", id: resident.id, label: resident.unitNumber, step: 1 })}>刪除</Button></TableCell></TableRow>)}</TableBody>
                     </Table>
                   </CardContent>
                 </Card>
@@ -469,7 +529,7 @@ export default function AdminPage() {
 
               <TabsContent value="schedule" className="space-y-6">
                 <Card>
-                  <CardHeader><CardTitle>預約連結管理</CardTitle></CardHeader>
+                  <CardHeader><CardTitle>預約連結管理</CardTitle><CardDescription>你有沒有想過，停止連結與刪除連結其實是兩件完全不同的事。停止只是關閉入口、資料保留；刪除則是把連結主檔直接清掉。</CardDescription></CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={linkForm.companyId} onChange={event => setLinkForm(current => ({ ...current, companyId: event.target.value }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={linkForm.projectId} onChange={event => setLinkForm(current => ({ ...current, projectId: event.target.value }))}><option value="">請選擇</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
@@ -478,7 +538,7 @@ export default function AdminPage() {
                     <div className="space-y-2"><Label>開始時間</Label><Input type="datetime-local" value={linkForm.startsAt} onChange={event => setLinkForm(current => ({ ...current, startsAt: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>結束時間</Label><Input type="datetime-local" value={linkForm.endsAt} onChange={event => setLinkForm(current => ({ ...current, endsAt: event.target.value }))} /></div>
                     <div className="flex items-center gap-3 md:col-span-2"><input type="checkbox" checked={linkForm.isEnabled} onChange={event => setLinkForm(current => ({ ...current, isEnabled: event.target.checked }))} /><span className="text-sm text-muted-foreground">目前啟用</span></div>
-                    <div className="md:col-span-2"><Button onClick={() => linkMutation.mutate({ ...linkForm, type: linkForm.type as "initial" | "reinspect", companyId: Number(linkForm.companyId), projectId: Number(linkForm.projectId), startsAt: new Date(linkForm.startsAt), endsAt: new Date(linkForm.endsAt) })} disabled={linkMutation.isPending}>{linkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}儲存連結設定</Button></div>
+                    <div className="md:col-span-2 flex flex-wrap gap-3"><Button onClick={() => linkMutation.mutate({ id: linkForm.id, companyId: Number(linkForm.companyId), projectId: Number(linkForm.projectId), type: linkForm.type as "initial" | "reinspect", isEnabled: linkForm.isEnabled, startsAt: new Date(linkForm.startsAt), endsAt: new Date(linkForm.endsAt), disabledReason: linkForm.disabledReason })} disabled={linkMutation.isPending}>{linkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{linkForm.id ? "更新連結設定" : "儲存連結設定"}</Button>{linkForm.id ? <Button variant="outline" onClick={cancelEditingLink} disabled={linkMutation.isPending}>取消編輯</Button> : null}</div>
                   </CardContent>
                 </Card>
 
@@ -512,7 +572,7 @@ export default function AdminPage() {
                   <CardHeader><CardTitle>目前連結與時段</CardTitle></CardHeader>
                   <CardContent className="grid gap-6 xl:grid-cols-2">
                     <div className="overflow-x-auto">
-                      <Table><TableHeader><TableRow><TableHead>建案 ID</TableHead><TableHead>類型</TableHead><TableHead>啟用期間</TableHead></TableRow></TableHeader><TableBody>{links.map(link => <TableRow key={link.id}><TableCell>{link.projectId}</TableCell><TableCell>{link.type}</TableCell><TableCell>{formatDateTime(link.startsAt)} ~ {formatDateTime(link.endsAt)}</TableCell></TableRow>)}</TableBody></Table>
+                      <Table><TableHeader><TableRow><TableHead>建案</TableHead><TableHead>類型</TableHead><TableHead>狀態</TableHead><TableHead>停用原因</TableHead><TableHead>啟用期間</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{links.map(link => <TableRow key={link.id}><TableCell>{projectNameById.get(link.projectId) || `建案 ${link.projectId}`}</TableCell><TableCell>{link.type}</TableCell><TableCell><Badge variant={link.isEnabled ? "outline" : "secondary"}>{link.isEnabled ? "啟用中" : "已停止"}</Badge></TableCell><TableCell>{link.disabledReason || "-"}</TableCell><TableCell>{formatDateTime(link.startsAt)} ~ {formatDateTime(link.endsAt)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingLink(link)}>編輯</Button><Button variant="outline" size="sm" onClick={() => toggleLinkEnabledMutation.mutate({ id: link.id, isEnabled: !link.isEnabled, disabledReason: link.disabledReason || "此連結已由後台停止" })} disabled={toggleLinkEnabledMutation.isPending}>{link.isEnabled ? "停止" : "重新啟用"}</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "link", id: link.id, label: `${projectNameById.get(link.projectId) || `建案 ${link.projectId}`} / ${link.type}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>)}</TableBody></Table>
                     </div>
                     <div className="overflow-x-auto">
                       <Table><TableHeader><TableRow><TableHead>建案 ID</TableHead><TableHead>日期</TableHead><TableHead>時段</TableHead><TableHead>名額</TableHead></TableRow></TableHeader><TableBody>{slots.map(slot => <TableRow key={slot.id}><TableCell>{slot.projectId}</TableCell><TableCell>{formatDateTime(slot.slotDate)}</TableCell><TableCell>{slot.startLabel} - {slot.endLabel}</TableCell><TableCell>{slot.capacity}</TableCell></TableRow>)}</TableBody></Table>
@@ -559,14 +619,19 @@ export default function AdminPage() {
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={open => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>確認刪除資料？</AlertDialogTitle>
+            <AlertDialogTitle>{deleteTarget?.step === 2 ? "第二次確認：即將永久刪除" : "第一次確認：準備刪除資料"}</AlertDialogTitle>
             <AlertDialogDescription>
-              你即將刪除「{deleteTarget?.label}」。這個操作不應該靠手滑完成，所以系統會要求你再確認一次。
+              {deleteTarget?.step === 2
+                ? `你現在要永久刪除「${deleteTarget?.label}」。若目標是公司或建案，系統會連同其下住戶聯絡人、預約連結、時段、預約與改期紀錄一起真刪除。這一步沒有回復鈕。`
+                : `你即將刪除「${deleteTarget?.label}」。系統依你的規則要求兩次確認，先提醒你：停止連結可保留資料，只有真的確定不要這筆資料時才進入下一步。`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>確認刪除</AlertDialogAction>
+            <AlertDialogCancel disabled={isDeleting}>取消</AlertDialogCancel>
+            <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {deleteTarget?.step === 2 ? "我已確認，永久刪除" : "進入第二次確認"}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
