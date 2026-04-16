@@ -26,14 +26,10 @@ export function filterResidentsByProject<T extends DashboardResidentSource>(resi
 
 export function buildBookingLinkUrl(input: {
   origin: string;
-  companySlug: string;
-  projectSlug: string;
-  type: "initial" | "reinspect";
+  shareToken: string;
 }) {
   const url = new URL("/", input.origin);
-  url.searchParams.set("company", input.companySlug);
-  url.searchParams.set("project", input.projectSlug);
-  url.searchParams.set("type", input.type);
+  url.searchParams.set("link", input.shareToken);
   return url.toString();
 }
 
@@ -41,7 +37,7 @@ export function buildBookingLinkUrlMap(input: {
   origin: string;
   companies: DashboardCompanySource[];
   projects: DashboardProjectSource[];
-  links: Array<{ id: number; companyId: number; projectId: number; type: "initial" | "reinspect" }>;
+  links: Array<{ id: number; companyId: number; projectId: number; shareToken?: string | null }>;
 }) {
   const companyById = new Map(input.companies.map(company => [company.id, company]));
   const projectById = new Map(input.projects.map(project => [project.id, project]));
@@ -50,7 +46,7 @@ export function buildBookingLinkUrlMap(input: {
     input.links.map(link => {
       const company = companyById.get(link.companyId);
       const project = projectById.get(link.projectId);
-      if (!company || !project) {
+      if (!company || !project || !link.shareToken) {
         return [link.id, null] as const;
       }
 
@@ -58,9 +54,7 @@ export function buildBookingLinkUrlMap(input: {
         link.id,
         buildBookingLinkUrl({
           origin: input.origin,
-          companySlug: company.slug,
-          projectSlug: project.slug,
-          type: link.type,
+          shareToken: link.shareToken,
         }),
       ] as const;
     })

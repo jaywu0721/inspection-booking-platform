@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, asc, count, desc, eq, inArray, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
@@ -29,6 +30,10 @@ let seedPromise: Promise<void> | null = null;
 
 function nowMs() {
   return Date.now();
+}
+
+function createShareToken() {
+  return randomUUID().replace(/-/g, "");
 }
 
 function toKebabSlug(value: string) {
@@ -163,8 +168,8 @@ async function seedDefaults() {
       const endsAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
       await db.insert(bookingLinks).values([
-        { companyId: company.id, projectId, type: "initial", isEnabled: true, startsAt, endsAt, disabledReason: null },
-        { companyId: company.id, projectId, type: "reinspect", isEnabled: true, startsAt, endsAt, disabledReason: null },
+        { companyId: company.id, projectId, type: "initial", shareToken: createShareToken(), isEnabled: true, startsAt, endsAt, disabledReason: null },
+        { companyId: company.id, projectId, type: "reinspect", shareToken: createShareToken(), isEnabled: true, startsAt, endsAt, disabledReason: null },
       ]);
     }
   }
@@ -278,11 +283,42 @@ export async function getAdminProfile(username: string) {
   return credential ?? null;
 }
 
-async function getActiveLink(companySlug: string, projectSlug: string, type: "initial" | "reinspect") {
+type PublicSiteLinkInput = {
+  linkToken?: string;
+  companySlug?: string;
+  projectSlug?: string;
+  type?: "initial" | "reinspect";
+};
+
+async function getActiveLink(input: PublicSiteLinkInput) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
-  const [row] = await db
+  if (input.linkToken) {
+    const [row] = await db
+      .select({
+        company: companies,
+        project: projects,
+        link: bookingLinks,
+      })
+      .from(bookingLinks)
+      .innerJoin(companies, eq(companies.id, bookingLinks.companyId))
+      .innerJoin(projects, eq(projects.id, bookingLinks.projectId))
+      .where(eq(bookingLinks.shareToken, input.linkToken))
+      .limit(1);
+
+    if (!row) {
+      throw new Error("找不到對應的預約連結");
+    }
+
+    return row;
+  }
+
+  if (!input.companySlug || !input.projectSlug || !input.type) {
+    throw new Error("缺少預約連結識別資訊");
+  }
+
+  const rows = await db
     .select({
       company: companies,
       project: projects,
@@ -292,16 +328,21 @@ async function getActiveLink(companySlug: string, projectSlug: string, type: "in
     .innerJoin(projects, eq(projects.companyId, companies.id))
     .innerJoin(
       bookingLinks,
-      and(eq(bookingLinks.companyId, companies.id), eq(bookingLinks.projectId, projects.id), eq(bookingLinks.type, type))
+      and(eq(bookingLinks.companyId, companies.id), eq(bookingLinks.projectId, projects.id), eq(bookingLinks.type, input.type))
     )
-    .where(and(eq(companies.slug, companySlug), eq(projects.slug, projectSlug)))
-    .limit(1);
+    .where(and(eq(companies.slug, input.companySlug), eq(projects.slug, input.projectSlug)))
+    .orderBy(desc(bookingLinks.createdAt))
+    .limit(2);
 
-  if (!row) {
+  if (!rows[0]) {
     throw new Error("找不到對應的公司或建案設定");
   }
 
-  return row;
+  if (rows.length > 1) {
+    throw new Error("此建案已有多筆同類型連結，請改用完整分享網址");
+  }
+
+  return rows[0];
 }
 
 async function getSlotUsage(projectId: number) {
@@ -317,12 +358,8 @@ async function getSlotUsage(projectId: number) {
   return new Map(usage.map(item => [item.slotId, Number(item.used)]));
 }
 
-export async function getPublicSiteContext(input: {
-  companySlug: string;
-  projectSlug: string;
-  type: "initial" | "reinspect";
-}) {
-  const row = await getActiveLink(input.companySlug, input.projectSlug, input.type);
+export async function getPublicSiteContext(input: PublicSiteLinkInput) {
+  const row = await getActiveLink(input);
   const now = new Date();
   const isExpired = !row.link.isEnabled || row.link.startsAt > now || row.link.endsAt < now;
   const slotUsage = await getSlotUsage(row.project.id);
@@ -352,10 +389,7 @@ export async function getPublicSiteContext(input: {
   };
 }
 
-export async function verifyResidentForBooking(input: {
-  companySlug: string;
-  projectSlug: string;
-  type: "initial" | "reinspect";
+export async function verifyResidentForBooking(input: PublicSiteLinkInput & {
   unitNumber: string;
   phoneNumber: string;
 }) {
@@ -402,7 +436,13 @@ export async function verifyResidentForBooking(input: {
     .innerJoin(bookingSlots, eq(bookingSlots.id, bookings.slotId))
     .innerJoin(projects, eq(projects.id, bookings.projectId))
     .innerJoin(companies, eq(companies.id, bookings.companyId))
-    .where(eq(bookings.residentId, resident.id))
+    .where(
+      and(
+        eq(bookings.projectId, site.project.id),
+        eq(bookings.unitNumberSnapshot, resident.unitNumber),
+        sql`${bookings.status} <> 'cancelled'`
+      )
+    )
     .orderBy(desc(bookings.createdAtMs));
 
   return {
@@ -412,10 +452,7 @@ export async function verifyResidentForBooking(input: {
   };
 }
 
-export async function createBookingRecord(input: {
-  companySlug: string;
-  projectSlug: string;
-  type: "initial" | "reinspect";
+export async function createBookingRecord(input: PublicSiteLinkInput & {
   residentId: number;
   slotId: number;
   gmail: string;
@@ -450,9 +487,9 @@ export async function createBookingRecord(input: {
       .from(bookings)
       .where(
         and(
-          eq(bookings.residentId, resident.id),
           eq(bookings.projectId, site.project.id),
-          eq(bookings.bookingType, input.type),
+          eq(bookings.unitNumberSnapshot, resident.unitNumber),
+          eq(bookings.bookingType, site.link.type),
           sql`${bookings.status} <> 'cancelled'`
         )
       )
@@ -479,7 +516,7 @@ export async function createBookingRecord(input: {
       linkId: site.link.id,
       residentId: resident.id,
       slotId: slot.id,
-      bookingType: input.type,
+      bookingType: site.link.type,
       unitNumberSnapshot: resident.unitNumber,
       phoneNumberSnapshot: resident.phoneNumber,
       gmail: input.gmail,
@@ -654,16 +691,25 @@ export async function setBookingLinkEnabledRecord(input: { id: number; isEnabled
   return input.id;
 }
 
-export async function upsertBookingLinkRecord(input: Omit<InsertBookingLink, "createdAt" | "updatedAt"> & { id?: number }) {
+export async function upsertBookingLinkRecord(input: Omit<InsertBookingLink, "createdAt" | "updatedAt" | "shareToken"> & { id?: number; shareToken?: string }) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
   if (input.id) {
-    await db.update(bookingLinks).set({ ...input, disabledReason: input.isEnabled ? null : input.disabledReason ?? null }).where(eq(bookingLinks.id, input.id));
+    const updateValues = {
+      ...input,
+      shareToken: input.shareToken ?? undefined,
+      disabledReason: input.isEnabled ? null : input.disabledReason ?? null,
+    };
+    await db.update(bookingLinks).set(updateValues).where(eq(bookingLinks.id, input.id));
     return input.id;
   }
 
-  const inserted = await db.insert(bookingLinks).values({ ...input, disabledReason: input.isEnabled ? null : input.disabledReason ?? null });
+  const inserted = await db.insert(bookingLinks).values({
+    ...input,
+    shareToken: input.shareToken ?? createShareToken(),
+    disabledReason: input.isEnabled ? null : input.disabledReason ?? null,
+  });
   return Number(inserted[0].insertId);
 }
 

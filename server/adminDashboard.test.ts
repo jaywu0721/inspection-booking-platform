@@ -17,29 +17,29 @@ describe("admin dashboard helpers", () => {
     expect(filterResidentsByProject(residents, "0")).toEqual(residents);
   });
 
-  it("builds a shareable booking url", () => {
+  it("builds a shareable booking url from link token", () => {
     expect(
       buildBookingLinkUrl({
         origin: "https://inspectionshop-chxaqqnk.manus.space",
-        companySlug: "yisin",
-        projectSlug: "yisin-demo",
-        type: "initial",
+        shareToken: "link-token-123",
       })
-    ).toBe("https://inspectionshop-chxaqqnk.manus.space/?company=yisin&project=yisin-demo&type=initial");
+    ).toBe("https://inspectionshop-chxaqqnk.manus.space/?link=link-token-123");
   });
 
-  it("builds link urls for rows with matching company and project slugs", () => {
+  it("builds link urls for rows with matching company, project and share token", () => {
     const urlMap = buildBookingLinkUrlMap({
       origin: "https://inspectionshop-chxaqqnk.manus.space",
       companies: [{ id: 1, slug: "yisin", name: "鷁欣建設" }],
       projects: [{ id: 9, slug: "alpha", name: "Alpha", companyId: 1 }],
       links: [
-        { id: 100, companyId: 1, projectId: 9, type: "initial" },
-        { id: 101, companyId: 1, projectId: 999, type: "reinspect" },
+        { id: 100, companyId: 1, projectId: 9, shareToken: "alpha-token" },
+        { id: 101, companyId: 1, projectId: 999, shareToken: "missing-project" },
+        { id: 102, companyId: 1, projectId: 9, shareToken: null },
       ],
     });
 
-    expect(urlMap.get(100)).toBe("https://inspectionshop-chxaqqnk.manus.space/?company=yisin&project=alpha&type=initial");
+    expect(urlMap.get(100)).toBe("https://inspectionshop-chxaqqnk.manus.space/?link=alpha-token");
     expect(urlMap.get(101)).toBeNull();
+    expect(urlMap.get(102)).toBeNull();
   });
 });

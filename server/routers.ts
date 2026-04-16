@@ -31,6 +31,16 @@ import {
 
 const bookingTypeSchema = z.enum(["initial", "reinspect"]);
 const bookingStatusSchema = z.enum(["booked", "rescheduled", "cancelled"]);
+const publicSiteLocatorSchema = z
+  .object({
+    linkToken: z.string().min(1).optional(),
+    companySlug: z.string().min(1).optional(),
+    projectSlug: z.string().min(1).optional(),
+    type: bookingTypeSchema.optional(),
+  })
+  .refine(input => Boolean(input.linkToken) || Boolean(input.companySlug && input.projectSlug && input.type), {
+    message: "缺少預約連結識別資訊",
+  });
 
 function requireAdmin(headers: Record<string, unknown> | undefined) {
   const cookieHeader = typeof headers?.cookie === "string" ? headers.cookie : undefined;
@@ -52,21 +62,10 @@ export const appRouter = router({
     }),
   }),
   publicSite: router({
-    getContext: publicProcedure
-      .input(
-        z.object({
-          companySlug: z.string().min(1),
-          projectSlug: z.string().min(1),
-          type: bookingTypeSchema,
-        })
-      )
-      .query(({ input }) => getPublicSiteContext(input)),
+    getContext: publicProcedure.input(publicSiteLocatorSchema).query(({ input }) => getPublicSiteContext(input)),
     verifyResident: publicProcedure
       .input(
-        z.object({
-          companySlug: z.string().min(1),
-          projectSlug: z.string().min(1),
-          type: bookingTypeSchema,
+        publicSiteLocatorSchema.safeExtend({
           unitNumber: z.string().min(1),
           phoneNumber: z.string().min(1),
         })
@@ -74,10 +73,7 @@ export const appRouter = router({
       .mutation(({ input }) => verifyResidentForBooking(input)),
     createBooking: publicProcedure
       .input(
-        z.object({
-          companySlug: z.string().min(1),
-          projectSlug: z.string().min(1),
-          type: bookingTypeSchema,
+        publicSiteLocatorSchema.safeExtend({
           residentId: z.number().int().positive(),
           slotId: z.number().int().positive(),
           gmail: z.string().email().refine(value => value.endsWith("@gmail.com"), {

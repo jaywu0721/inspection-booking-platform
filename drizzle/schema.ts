@@ -81,6 +81,7 @@ export const bookingLinks = mysqlTable(
     companyId: int("companyId").notNull(),
     projectId: int("projectId").notNull(),
     type: mysqlEnum("type", ["initial", "reinspect"]).notNull(),
+    shareToken: varchar("shareToken", { length: 64 }).notNull(),
     isEnabled: boolean("isEnabled").default(true).notNull(),
     startsAt: timestamp("startsAt").notNull(),
     endsAt: timestamp("endsAt").notNull(),
@@ -89,7 +90,7 @@ export const bookingLinks = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    projectTypeUnique: uniqueIndex("booking_links_project_type_unique").on(table.projectId, table.type),
+    shareTokenUnique: uniqueIndex("booking_links_share_token_unique").on(table.shareToken),
   })
 );
 

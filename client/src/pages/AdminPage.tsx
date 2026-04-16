@@ -3,6 +3,7 @@ import { redirectToAdminDashboardAfterLogin } from "@/lib/adminRedirect";
 import { DEFAULT_SLOT_PRESETS, createProjectSlug } from "@/lib/adminConfig";
 import { buildBookingLinkUrlMap, filterResidentsByProject } from "@/lib/adminDashboard";
 import { getProjectsForCompany, parsePositiveId, validateResidentForm } from "@/lib/adminForms";
+import { validateBookingLinkForm } from "@/lib/linkForm";
 import { buildCompanyFormFromRecord, createEmptyCompanyForm } from "@/lib/companyEditor";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -175,8 +176,9 @@ export default function AdminPage() {
 
   const linkMutation = trpc.admin.saveLink.useMutation({
     onSuccess: async () => {
-      toast.success("預約連結設定已儲存");
+      toast.success("預約連結已產生或更新，請在下方直接複製分享網址給客戶");
       await refreshAll();
+      setLinkForm(createEmptyLinkForm());
     },
     onError: error => toast.error(error.message),
   });
@@ -248,6 +250,7 @@ export default function AdminPage() {
 
   const projectOptions = useMemo(() => projects.map(project => ({ value: String(project.id), label: project.name })), [projects]);
   const residentProjectOptions = useMemo(() => getProjectsForCompany(projects, residentForm.companyId), [projects, residentForm.companyId]);
+  const linkProjectOptions = useMemo(() => getProjectsForCompany(projects, linkForm.companyId), [projects, linkForm.companyId]);
   const projectNameById = useMemo(() => new Map(projects.map(project => [project.id, project.name])), [projects]);
   const filteredResidents = useMemo(() => filterResidentsByProject(residents, residentListProjectId), [residents, residentListProjectId]);
   const bookingLinkUrlById = useMemo(() => buildBookingLinkUrlMap({ origin: window.location.origin, companies, projects, links }), [companies, projects, links]);
@@ -297,9 +300,19 @@ export default function AdminPage() {
     });
   };
 
+  const saveLink = () => {
+    const validation = validateBookingLinkForm(linkForm);
+    if (!validation.ok) {
+      toast.error(validation.message);
+      return;
+    }
+
+    linkMutation.mutate(validation.payload);
+  };
+
   const copyBookingLink = async (url: string | null) => {
     if (!url) {
-      toast.error("這筆連結缺少公司或建案 slug，暫時無法產生網址");
+      toast.error("這筆連結缺少分享 token 或關聯資料，暫時無法產生網址");
       return;
     }
 
@@ -549,14 +562,14 @@ export default function AdminPage() {
 
               <TabsContent value="residents" className="space-y-6">
                 <Card>
-                  <CardHeader><CardTitle>住戶資料管理</CardTitle><CardDescription>你現在要求逐筆新增。這樣做的風險是戶數一多時建立成本很高，之後最好補 CSV 匯入，不然正式案量一上來會卡死。</CardDescription></CardHeader>
+                  <CardHeader><CardTitle>住戶資料管理</CardTitle><CardDescription>你現在要求逐筆新增。這樣做的風險是戶數一多時建立成本很高，之後最好補 CSV 匯入；另外同一戶別如有兩位以上聯絡人，請分成多筆資料新增，各自填入手機。</CardDescription></CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={residentForm.companyId} onChange={event => setResidentForm(current => ({ ...current, companyId: event.target.value, projectId: "" }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={residentForm.projectId} onChange={event => setResidentForm(current => ({ ...current, projectId: event.target.value }))} disabled={!residentForm.companyId}><option value="">{residentForm.companyId ? "請選擇" : "請先選公司"}</option>{residentProjectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>標準戶號</Label><Input value={residentForm.unitNumber} onChange={event => setResidentForm(current => ({ ...current, unitNumber: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>手機號碼</Label><Input value={residentForm.phoneNumber} onChange={event => setResidentForm(current => ({ ...current, phoneNumber: event.target.value }))} /></div>
                     <div className="space-y-2 md:col-span-2"><Label>備註</Label><Textarea value={residentForm.note} onChange={event => setResidentForm(current => ({ ...current, note: event.target.value }))} /></div>
-                    <div className="md:col-span-2 space-y-2"><Button onClick={saveResident} disabled={residentMutation.isPending}>{residentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}儲存住戶資料</Button><p className="text-sm text-muted-foreground">請先選擇公司，再選該公司底下的建案，最後輸入戶號與手機後儲存。</p></div>
+                    <div className="md:col-span-2 space-y-2"><Button onClick={saveResident} disabled={residentMutation.isPending}>{residentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}儲存住戶資料</Button><p className="text-sm text-muted-foreground">請先選擇公司，再選該公司底下的建案，最後輸入戶號與手機後儲存。若同一戶別有多位聯絡人，請用相同戶號分別建立多筆手機資料。</p></div>
                   </CardContent>
                 </Card>
 
@@ -588,16 +601,16 @@ export default function AdminPage() {
 
               <TabsContent value="schedule" className="space-y-6">
                 <Card>
-                  <CardHeader><CardTitle>預約連結管理</CardTitle><CardDescription>你有沒有想過，停止連結與刪除連結其實是兩件完全不同的事。停止只是關閉入口、資料保留；刪除則是把連結主檔直接清掉。</CardDescription></CardHeader>
+                  <CardHeader><CardTitle>預約連結管理</CardTitle><CardDescription>停止連結與刪除連結是兩件不同的事；另外現在同一建案可建立多筆連結。也就是說，你每按一次確認，都會產生一筆可獨立分享、可獨立停止的連結。</CardDescription></CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={linkForm.companyId} onChange={event => setLinkForm(current => ({ ...current, companyId: event.target.value }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
-                    <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={linkForm.projectId} onChange={event => setLinkForm(current => ({ ...current, projectId: event.target.value }))}><option value="">請選擇</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
+                    <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={linkForm.companyId} onChange={event => setLinkForm(current => ({ ...current, companyId: event.target.value, projectId: "" }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
+                    <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={linkForm.projectId} onChange={event => setLinkForm(current => ({ ...current, projectId: event.target.value }))} disabled={!linkForm.companyId}><option value="">{linkForm.companyId ? "請選擇" : "請先選公司"}</option>{linkProjectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>類型</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={linkForm.type} onChange={event => setLinkForm(current => ({ ...current, type: event.target.value }))}><option value="initial">初驗</option><option value="reinspect">複驗</option></select></div>
                     <div className="space-y-2"><Label>停用原因</Label><Input value={linkForm.disabledReason} onChange={event => setLinkForm(current => ({ ...current, disabledReason: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>開始時間</Label><Input type="datetime-local" value={linkForm.startsAt} onChange={event => setLinkForm(current => ({ ...current, startsAt: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>結束時間</Label><Input type="datetime-local" value={linkForm.endsAt} onChange={event => setLinkForm(current => ({ ...current, endsAt: event.target.value }))} /></div>
                     <div className="flex items-center gap-3 md:col-span-2"><input type="checkbox" checked={linkForm.isEnabled} onChange={event => setLinkForm(current => ({ ...current, isEnabled: event.target.checked }))} /><span className="text-sm text-muted-foreground">目前啟用</span></div>
-                    <div className="md:col-span-2 flex flex-wrap gap-3"><Button onClick={() => linkMutation.mutate({ id: linkForm.id, companyId: Number(linkForm.companyId), projectId: Number(linkForm.projectId), type: linkForm.type as "initial" | "reinspect", isEnabled: linkForm.isEnabled, startsAt: new Date(linkForm.startsAt), endsAt: new Date(linkForm.endsAt), disabledReason: linkForm.disabledReason })} disabled={linkMutation.isPending}>{linkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{linkForm.id ? "更新連結設定" : "儲存連結設定"}</Button>{linkForm.id ? <Button variant="outline" onClick={cancelEditingLink} disabled={linkMutation.isPending}>取消編輯</Button> : null}</div>
+                    <div className="md:col-span-2 space-y-2"><div className="flex flex-wrap gap-3"><Button onClick={saveLink} disabled={linkMutation.isPending}>{linkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{linkForm.id ? "更新連結設定" : "確認並產生預約連結"}</Button>{linkForm.id ? <Button variant="outline" onClick={cancelEditingLink} disabled={linkMutation.isPending}>取消編輯</Button> : null}</div><p className="text-sm text-muted-foreground">送出後系統會建立一筆獨立分享連結，請到下方「目前連結與時段」直接複製網址傳給客戶。</p></div>
                   </CardContent>
                 </Card>
 
@@ -631,7 +644,7 @@ export default function AdminPage() {
                   <CardHeader><CardTitle>目前連結與時段</CardTitle><CardDescription>你已經建立連結卻拿不到網址，這就是交付斷點。現在每筆已啟用或已停止的連結都會直接顯示可分享網址，方便你複製給客戶。</CardDescription></CardHeader>
                   <CardContent className="grid gap-6 xl:grid-cols-2">
                     <div className="overflow-x-auto">
-                      <Table><TableHeader><TableRow><TableHead>建案</TableHead><TableHead>類型</TableHead><TableHead>狀態</TableHead><TableHead>分享網址</TableHead><TableHead>停用原因</TableHead><TableHead>啟用期間</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{links.map(link => { const bookingUrl = bookingLinkUrlById.get(link.id) ?? null; return <TableRow key={link.id}><TableCell>{projectNameById.get(link.projectId) || `建案 ${link.projectId}`}</TableCell><TableCell>{link.type}</TableCell><TableCell><Badge variant={link.isEnabled ? "outline" : "secondary"}>{link.isEnabled ? "啟用中" : "已停止"}</Badge></TableCell><TableCell className="min-w-[260px]"><div className="space-y-2"><p className="break-all text-xs text-muted-foreground">{bookingUrl || "缺少 company/project slug，暫時無法產生連結"}</p>{bookingUrl ? <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => copyBookingLink(bookingUrl)}><Copy className="h-4 w-4" />複製</Button><Button asChild variant="outline" size="sm"><a href={bookingUrl} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />開啟</a></Button></div> : null}</div></TableCell><TableCell>{link.disabledReason || "-"}</TableCell><TableCell>{formatDateTime(link.startsAt)} ~ {formatDateTime(link.endsAt)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingLink(link)}>編輯</Button><Button variant="outline" size="sm" onClick={() => toggleLinkEnabledMutation.mutate({ id: link.id, isEnabled: !link.isEnabled, disabledReason: link.disabledReason || "此連結已由後台停止" })} disabled={toggleLinkEnabledMutation.isPending}>{link.isEnabled ? "停止" : "重新啟用"}</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "link", id: link.id, label: `${projectNameById.get(link.projectId) || `建案 ${link.projectId}`} / ${link.type}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>; })}</TableBody></Table>
+                      <Table><TableHeader><TableRow><TableHead>建案</TableHead><TableHead>類型</TableHead><TableHead>狀態</TableHead><TableHead>分享網址</TableHead><TableHead>停用原因</TableHead><TableHead>啟用期間</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{links.map(link => { const bookingUrl = bookingLinkUrlById.get(link.id) ?? null; return <TableRow key={link.id}><TableCell>{projectNameById.get(link.projectId) || `建案 ${link.projectId}`}</TableCell><TableCell>{link.type} / #{link.id}</TableCell><TableCell><Badge variant={link.isEnabled ? "outline" : "secondary"}>{link.isEnabled ? "啟用中" : "已停止"}</Badge></TableCell><TableCell className="min-w-[260px]"><div className="space-y-2"><p className="break-all text-xs text-muted-foreground">{bookingUrl || "缺少 share token，暫時無法產生連結"}</p>{bookingUrl ? <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => copyBookingLink(bookingUrl)}><Copy className="h-4 w-4" />複製</Button><Button asChild variant="outline" size="sm"><a href={bookingUrl} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />開啟</a></Button></div> : null}</div></TableCell><TableCell>{link.disabledReason || "-"}</TableCell><TableCell>{formatDateTime(link.startsAt)} ~ {formatDateTime(link.endsAt)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingLink(link)}>編輯</Button><Button variant="outline" size="sm" onClick={() => toggleLinkEnabledMutation.mutate({ id: link.id, isEnabled: !link.isEnabled, disabledReason: link.disabledReason || "此連結已由後台停止" })} disabled={toggleLinkEnabledMutation.isPending}>{link.isEnabled ? "停止" : "重新啟用"}</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "link", id: link.id, label: `${projectNameById.get(link.projectId) || `建案 ${link.projectId}`} / ${link.type} / #${link.id}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>; })}</TableBody></Table>
                     </div>
                     <div className="overflow-x-auto">
                       <Table><TableHeader><TableRow><TableHead>建案 ID</TableHead><TableHead>日期</TableHead><TableHead>時段</TableHead><TableHead>名額</TableHead></TableRow></TableHeader><TableBody>{slots.map(slot => <TableRow key={slot.id}><TableCell>{slot.projectId}</TableCell><TableCell>{formatDateTime(slot.slotDate)}</TableCell><TableCell>{slot.startLabel} - {slot.endLabel}</TableCell><TableCell>{slot.capacity}</TableCell></TableRow>)}</TableBody></Table>

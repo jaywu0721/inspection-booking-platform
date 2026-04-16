@@ -67,9 +67,9 @@ describe("booking flow integration", () => {
     const residentId2 = await upsertResidentRecord({
       companyId,
       projectId,
-      unitNumber: `B-${suffix}`,
+      unitNumber,
       phoneNumber: phoneNumber2,
-      note: "第二位住戶",
+      note: "同戶第二位聯絡人",
     });
 
     const startsAt = new Date(Date.now() - 60 * 60 * 1000);
@@ -125,6 +125,16 @@ describe("booking flow integration", () => {
     expect(verified.resident.id).toBe(residentId);
     expect(verified.existingBookings).toHaveLength(0);
     expect(verified.site.link.id).toBe(initialLinkId);
+    expect(verified.site.link.shareToken).toBeTruthy();
+
+    const verifiedWithSecondPhone = await verifyResidentForBooking({
+      linkToken: verified.site.link.shareToken,
+      unitNumber,
+      phoneNumber: phoneNumber2,
+    });
+
+    expect(verifiedWithSecondPhone.resident.id).toBe(residentId2);
+    expect(verifiedWithSecondPhone.site.link.id).toBe(initialLinkId);
 
     const bookingId = await createBookingRecord({
       companySlug,
@@ -176,15 +186,13 @@ describe("booking flow integration", () => {
 
     await expect(
       createBookingRecord({
-        companySlug,
-        projectSlug,
-        type: "initial",
+        linkToken: verified.site.link.shareToken,
         residentId: residentId2,
-        slotId: slot2Id,
+        slotId: slot1Id,
         gmail: `full${suffix}@gmail.com`,
         hasInspectionCompany: false,
       })
-    ).rejects.toThrow("該時段已額滿");
+    ).rejects.toThrow("此戶號已存在同類型預約");
 
     await setBookingLinkEnabledRecord({
       id: initialLinkId,

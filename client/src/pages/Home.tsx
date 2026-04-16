@@ -24,6 +24,12 @@ function formatDate(dateValue: string | Date) {
 export default function Home() {
   const params = useMemo(() => {
     const search = new URLSearchParams(window.location.search);
+    const linkToken = search.get("link") || undefined;
+
+    if (linkToken) {
+      return { linkToken };
+    }
+
     return {
       companySlug: search.get("company") || "yisin",
       projectSlug: search.get("project") || "yisin-demo",
@@ -119,11 +125,11 @@ export default function Home() {
           <CardHeader>
             <CardTitle>找不到對應的預約頁面</CardTitle>
             <CardDescription>
-              這個連結格式有問題。你有沒有想過，如果公司、建案與類型參數不一致，住戶根本進不來。
+              這個連結格式有問題。你有沒有想過，如果分享網址缺少完整 token，或 company、project、type 組合不一致，住戶根本進不來。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-muted-foreground">
-            <p>建議改成固定格式，例如：<code>?company=yisin&project=yisin-demo&type=initial</code></p>
+            <p>建議直接使用後台產生的完整分享網址，例如：<code>?link=你的專屬連結 token</code>。舊格式 <code>?company=yisin&project=yisin-demo&type=initial</code> 只適合單一示範連結。</p>
             <p>系統目前也提供兩組示範連結可用來驗證品牌切換。</p>
             <div className="flex flex-wrap gap-3">
               <Button asChild variant="outline"><a href="/?company=yisin&project=yisin-demo&type=initial">鷁欣建設示範連結</a></Button>
@@ -146,7 +152,7 @@ export default function Home() {
           <div className="grid gap-8 lg:grid-cols-[1.4fr_0.9fr] lg:items-center">
             <div className="space-y-6">
               <div className="flex flex-wrap items-center gap-3">
-                <Badge className="bg-white/12 text-white border-white/20 hover:bg-white/12">{params.type === "initial" ? "初驗預約" : "複驗預約"}</Badge>
+                <Badge className="bg-white/12 text-white border-white/20 hover:bg-white/12">{site.link.type === "initial" ? "初驗預約" : "複驗預約"}</Badge>
                 <Badge className="bg-white/12 text-white border-white/20 hover:bg-white/12">品牌動態載入</Badge>
                 <Button asChild variant="secondary" className="rounded-full bg-white text-slate-900 hover:bg-white/90">
                   <a href="/admin">進入後台管理</a>
@@ -185,7 +191,7 @@ export default function Home() {
             <Card className="border-white/15 bg-white/92 text-card-foreground shadow-2xl">
               <CardHeader>
                 <CardTitle>快速進入預約驗證</CardTitle>
-                <CardDescription>系統會先檢查戶號與手機，再開放查看既有預約與可選時段。</CardDescription>
+                <CardDescription>系統會先檢查戶號與任一已登記手機，再開放查看既有預約與可選時段。</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
                 <div className="space-y-2">
@@ -195,7 +201,8 @@ export default function Home() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phoneNumber">手機號碼</Label>
-                  <Input id="phoneNumber" value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} placeholder="請輸入完整手機號碼" />
+                  <Input id="phoneNumber" value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} placeholder="請輸入該戶任一已登記手機號碼" />
+                  <p className="text-xs text-muted-foreground">若同一戶別登記了多位聯絡人，只要輸入其中任一支已登記手機即可通過驗證。</p>
                 </div>
                 <Button className="w-full" onClick={submitVerification} disabled={verifyMutation.isPending}>
                   {verifyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
