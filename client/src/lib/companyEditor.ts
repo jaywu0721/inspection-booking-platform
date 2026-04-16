@@ -4,7 +4,6 @@ export type CompanyFormValues = {
   name: string;
   logoUrl: string;
   contactPhone: string;
-  contactEmail: string;
   heroTitle: string;
   heroDescription: string;
   inspectionFlow: string;
@@ -20,7 +19,6 @@ export type EditableCompany = {
   name: string;
   logoUrl: string;
   contactPhone: string;
-  contactEmail: string | null;
   heroTitle: string;
   heroDescription: string;
   inspectionFlow: string;
@@ -37,7 +35,6 @@ export function createEmptyCompanyForm(): CompanyFormValues {
     name: "",
     logoUrl: "",
     contactPhone: "",
-    contactEmail: "",
     heroTitle: "",
     heroDescription: "",
     inspectionFlow: "",
@@ -55,7 +52,6 @@ export function buildCompanyFormFromRecord(company: EditableCompany): CompanyFor
     name: company.name,
     logoUrl: company.logoUrl,
     contactPhone: company.contactPhone,
-    contactEmail: company.contactEmail ?? "",
     heroTitle: company.heroTitle,
     heroDescription: company.heroDescription,
     inspectionFlow: company.inspectionFlow,

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { redirectToAdminDashboardAfterLogin } from "@/lib/adminRedirect";
+import { DEFAULT_SLOT_PRESETS, createProjectSlug } from "@/lib/adminConfig";
 import { buildCompanyFormFromRecord, createEmptyCompanyForm } from "@/lib/companyEditor";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, LockKeyhole, Building2, CalendarRange, ClipboardList, Users, ArrowRightLeft } from "lucide-react";
@@ -43,7 +45,6 @@ export default function AdminPage() {
   const [companyForm, setCompanyForm] = useState(createEmptyCompanyForm());
   const [projectForm, setProjectForm] = useState({
     companyId: "",
-    slug: "",
     name: "",
     unitFormatHint: "",
     houseNumberExample: "",
@@ -70,12 +71,13 @@ export default function AdminPage() {
     projectId: "",
     slotDate: "",
     startLabel: "09:00",
-    endLabel: "11:00",
+    endLabel: "10:30",
     capacity: "1",
     isActive: true,
   });
   const [bookingFilters, setBookingFilters] = useState({ projectId: "", unitNumber: "", bookingType: "all", status: "all" });
   const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", newSlotId: "", note: "" });
+  const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "resident"; id: number; label: string }>(null);
 
   const adminProfile = trpc.adminAuth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
   const dashboardQuery = trpc.admin.dashboard.useQuery(undefined, {
@@ -139,7 +141,7 @@ export default function AdminPage() {
     onSuccess: async () => {
       toast.success("建案資料已儲存");
       await refreshAll();
-      setProjectForm({ companyId: "", slug: "", name: "", unitFormatHint: "", houseNumberExample: "", address: "" });
+      setProjectForm({ companyId: "", name: "", unitFormatHint: "", houseNumberExample: "", address: "" });
     },
     onError: error => toast.error(error.message),
   });
@@ -165,7 +167,7 @@ export default function AdminPage() {
     onSuccess: async () => {
       toast.success("時段已儲存");
       await refreshAll();
-      setSlotForm({ companyId: "", projectId: "", slotDate: "", startLabel: "09:00", endLabel: "11:00", capacity: "1", isActive: true });
+      setSlotForm({ companyId: "", projectId: "", slotDate: "", startLabel: "09:00", endLabel: "10:30", capacity: "1", isActive: true });
     },
     onError: error => toast.error(error.message),
   });
@@ -179,6 +181,25 @@ export default function AdminPage() {
     onError: error => toast.error(error.message),
   });
 
+  const companyDeleteMutation = trpc.admin.deleteCompany.useMutation({
+    onSuccess: async () => {
+      toast.success("公司資料已刪除");
+      setDeleteTarget(null);
+      setCompanyForm(createEmptyCompanyForm());
+      await refreshAll();
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  const residentDeleteMutation = trpc.admin.deleteResident.useMutation({
+    onSuccess: async () => {
+      toast.success("住戶資料已刪除");
+      setDeleteTarget(null);
+      await refreshAll();
+    },
+    onError: error => toast.error(error.message),
+  });
+
   const projectOptions = useMemo(() => projects.map(project => ({ value: String(project.id), label: project.name })), [projects]);
 
   const startEditingCompany = (company: typeof companies[number]) => {
@@ -187,6 +208,40 @@ export default function AdminPage() {
 
   const cancelEditingCompany = () => {
     setCompanyForm(createEmptyCompanyForm());
+  };
+
+  const applySlotPreset = (startLabel: string, endLabel: string) => {
+    setSlotForm(current => ({ ...current, startLabel, endLabel }));
+  };
+
+  const createPresetSlots = async () => {
+    if (!slotForm.companyId || !slotForm.projectId || !slotForm.slotDate) {
+      toast.error("請先選擇公司、建案與日期，再建立預設時段");
+      return;
+    }
+
+    for (const preset of DEFAULT_SLOT_PRESETS) {
+      await slotMutation.mutateAsync({
+        companyId: Number(slotForm.companyId),
+        projectId: Number(slotForm.projectId),
+        slotDate: new Date(slotForm.slotDate),
+        startLabel: preset.startLabel,
+        endLabel: preset.endLabel,
+        capacity: Number(slotForm.capacity),
+        isActive: slotForm.isActive,
+      });
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    if (deleteTarget.type === "company") {
+      await companyDeleteMutation.mutateAsync({ id: deleteTarget.id });
+      return;
+    }
+
+    await residentDeleteMutation.mutateAsync({ id: deleteTarget.id });
   };
 
   if (adminProfile.isLoading) {
@@ -302,7 +357,6 @@ export default function AdminPage() {
                     <div className="space-y-2"><Label>公司名稱</Label><Input value={companyForm.name} onChange={event => setCompanyForm(current => ({ ...current, name: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>Logo URL</Label><Input value={companyForm.logoUrl} onChange={event => setCompanyForm(current => ({ ...current, logoUrl: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>聯絡電話</Label><Input value={companyForm.contactPhone} onChange={event => setCompanyForm(current => ({ ...current, contactPhone: event.target.value }))} /></div>
-                    <div className="space-y-2"><Label>聯絡 Email</Label><Input value={companyForm.contactEmail} onChange={event => setCompanyForm(current => ({ ...current, contactEmail: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>主標題</Label><Input value={companyForm.heroTitle} onChange={event => setCompanyForm(current => ({ ...current, heroTitle: event.target.value }))} /></div>
                     <div className="space-y-2 md:col-span-2"><Label>主視覺說明</Label><Textarea value={companyForm.heroDescription} onChange={event => setCompanyForm(current => ({ ...current, heroDescription: event.target.value }))} /></div>
                     <div className="space-y-2 md:col-span-2"><Label>驗屋流程</Label><Textarea value={companyForm.inspectionFlow} onChange={event => setCompanyForm(current => ({ ...current, inspectionFlow: event.target.value }))} className="min-h-28" /></div>
@@ -318,15 +372,19 @@ export default function AdminPage() {
                   <CardHeader><CardTitle>既有公司</CardTitle></CardHeader>
                   <CardContent className="overflow-x-auto">
                     <Table>
-                      <TableHeader><TableRow><TableHead>公司</TableHead><TableHead>Slug</TableHead><TableHead>聯絡方式</TableHead><TableHead>最後更新</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
+                      <TableHeader><TableRow><TableHead>公司</TableHead><TableHead>聯絡方式</TableHead><TableHead>最後更新</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
                       <TableBody>
                         {companies.map(company => (
                           <TableRow key={company.id}>
                             <TableCell>{company.name}</TableCell>
-                            <TableCell>{company.slug}</TableCell>
                             <TableCell>{company.contactPhone}</TableCell>
                             <TableCell>{formatDateTime(company.updatedAt)}</TableCell>
-                            <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => startEditingCompany(company)}>編輯</Button></TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button variant="outline" size="sm" onClick={() => startEditingCompany(company)}>編輯</Button>
+                                <Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "company", id: company.id, label: company.name })}>刪除</Button>
+                              </div>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -340,12 +398,11 @@ export default function AdminPage() {
                   <CardHeader><CardTitle>建案管理</CardTitle><CardDescription>每個建案只維護差異資料，例如名稱、戶號格式提示與地址。這樣做的風險是：如果你想讓個別建案覆寫 FAQ，現在這版還沒做。</CardDescription></CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2"><Label>所屬公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={projectForm.companyId} onChange={event => setProjectForm(current => ({ ...current, companyId: event.target.value }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
-                    <div className="space-y-2"><Label>建案代號 slug</Label><Input value={projectForm.slug} onChange={event => setProjectForm(current => ({ ...current, slug: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>建案名稱</Label><Input value={projectForm.name} onChange={event => setProjectForm(current => ({ ...current, name: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>地址</Label><Input value={projectForm.address} onChange={event => setProjectForm(current => ({ ...current, address: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>戶號格式提示</Label><Input value={projectForm.unitFormatHint} onChange={event => setProjectForm(current => ({ ...current, unitFormatHint: event.target.value }))} placeholder="例如 棟別-樓層-戶別" /></div>
                     <div className="space-y-2"><Label>戶號範例</Label><Input value={projectForm.houseNumberExample} onChange={event => setProjectForm(current => ({ ...current, houseNumberExample: event.target.value }))} placeholder="例如 A-4-A" /></div>
-                    <div className="md:col-span-2"><Button onClick={() => projectMutation.mutate({ ...projectForm, companyId: Number(projectForm.companyId) })} disabled={projectMutation.isPending}>{projectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}儲存建案資料</Button></div>
+                    <div className="md:col-span-2"><Button onClick={() => projectMutation.mutate({ ...projectForm, slug: createProjectSlug(projectForm.name, projectForm.companyId), companyId: Number(projectForm.companyId) })} disabled={projectMutation.isPending}>{projectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}儲存建案資料</Button></div>
                   </CardContent>
                 </Card>
 
@@ -353,8 +410,8 @@ export default function AdminPage() {
                   <CardHeader><CardTitle>既有建案</CardTitle></CardHeader>
                   <CardContent className="overflow-x-auto">
                     <Table>
-                      <TableHeader><TableRow><TableHead>建案</TableHead><TableHead>公司 ID</TableHead><TableHead>Slug</TableHead><TableHead>戶號範例</TableHead></TableRow></TableHeader>
-                      <TableBody>{projects.map(project => <TableRow key={project.id}><TableCell>{project.name}</TableCell><TableCell>{project.companyId}</TableCell><TableCell>{project.slug}</TableCell><TableCell>{project.houseNumberExample}</TableCell></TableRow>)}</TableBody>
+                      <TableHeader><TableRow><TableHead>建案</TableHead><TableHead>公司 ID</TableHead><TableHead>戶號範例</TableHead></TableRow></TableHeader>
+                      <TableBody>{projects.map(project => <TableRow key={project.id}><TableCell>{project.name}</TableCell><TableCell>{project.companyId}</TableCell><TableCell>{project.houseNumberExample}</TableCell></TableRow>)}</TableBody>
                     </Table>
                   </CardContent>
                 </Card>
@@ -377,8 +434,8 @@ export default function AdminPage() {
                   <CardHeader><CardTitle>住戶清單</CardTitle></CardHeader>
                   <CardContent className="overflow-x-auto">
                     <Table>
-                      <TableHeader><TableRow><TableHead>戶號</TableHead><TableHead>手機</TableHead><TableHead>建案 ID</TableHead><TableHead>備註</TableHead></TableRow></TableHeader>
-                      <TableBody>{residents.map(resident => <TableRow key={resident.id}><TableCell>{resident.unitNumber}</TableCell><TableCell>{resident.phoneNumber}</TableCell><TableCell>{resident.projectId}</TableCell><TableCell>{resident.note || "-"}</TableCell></TableRow>)}</TableBody>
+                      <TableHeader><TableRow><TableHead>戶號</TableHead><TableHead>手機</TableHead><TableHead>建案 ID</TableHead><TableHead>備註</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
+                      <TableBody>{residents.map(resident => <TableRow key={resident.id}><TableCell>{resident.unitNumber}</TableCell><TableCell>{resident.phoneNumber}</TableCell><TableCell>{resident.projectId}</TableCell><TableCell>{resident.note || "-"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "resident", id: resident.id, label: resident.unitNumber })}>刪除</Button></TableCell></TableRow>)}</TableBody>
                     </Table>
                   </CardContent>
                 </Card>
@@ -402,6 +459,18 @@ export default function AdminPage() {
                 <Card>
                   <CardHeader><CardTitle>時段管理</CardTitle></CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
+                    <div className="md:col-span-2 rounded-2xl border border-dashed border-border/70 bg-muted/20 p-4">
+                      <p className="text-sm font-medium">快速建立常用時段</p>
+                      <p className="mt-2 text-sm text-muted-foreground">先選公司、建案、日期與名額後，可一鍵建立 09:00-10:30、10:30-12:00、14:00-15:30、15:30-17:00 四個時段；下方欄位仍保留手動編輯。</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {DEFAULT_SLOT_PRESETS.map(preset => (
+                          <Button key={`${preset.startLabel}-${preset.endLabel}`} type="button" variant="outline" size="sm" onClick={() => applySlotPreset(preset.startLabel, preset.endLabel)}>
+                            {preset.startLabel}-{preset.endLabel}
+                          </Button>
+                        ))}
+                        <Button type="button" size="sm" onClick={createPresetSlots} disabled={slotMutation.isPending}>一鍵建立預設時段</Button>
+                      </div>
+                    </div>
                     <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.companyId} onChange={event => setSlotForm(current => ({ ...current, companyId: event.target.value }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.projectId} onChange={event => setSlotForm(current => ({ ...current, projectId: event.target.value }))}><option value="">請選擇</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>日期</Label><Input type="date" value={slotForm.slotDate} onChange={event => setSlotForm(current => ({ ...current, slotDate: event.target.value }))} /></div>
@@ -461,6 +530,20 @@ export default function AdminPage() {
           </div>
         </div>
       </main>
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={open => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除資料？</AlertDialogTitle>
+            <AlertDialogDescription>
+              你即將刪除「{deleteTarget?.label}」。這個操作不應該靠手滑完成，所以系統會要求你再確認一次。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>確認刪除</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -10,6 +10,8 @@ import {
 } from "./adminAuth";
 import {
   createBookingRecord,
+  deleteCompanyRecord,
+  deleteResidentRecord,
   getAdminDashboardData,
   getAdminProfile,
   getPublicSiteContext,
@@ -157,7 +159,7 @@ export const appRouter = router({
         z.object({
           id: z.number().int().positive().optional(),
           companyId: z.number().int().positive(),
-          slug: z.string().min(1),
+          slug: z.string().min(1).optional(),
           name: z.string().min(1),
           unitFormatHint: z.string().min(1),
           houseNumberExample: z.string().min(1),
@@ -184,6 +186,20 @@ export const appRouter = router({
         requireAdmin(ctx.req.headers);
         const id = await upsertResidentRecord({ ...input, note: input.note || null });
         return { success: true, id } as const;
+      }),
+    deleteCompany: publicProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        await deleteCompanyRecord(input.id);
+        return { success: true } as const;
+      }),
+    deleteResident: publicProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        await deleteResidentRecord(input.id);
+        return { success: true } as const;
       }),
     saveLink: publicProcedure
       .input(

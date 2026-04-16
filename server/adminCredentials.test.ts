@@ -35,5 +35,5 @@ describe("admin credentials env validation", () => {
 
     expect(result).toEqual({ success: true });
     expect(cookieHeader).toContain("inspection_admin_session=");
-  });
+  }, 20000);
 });

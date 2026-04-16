@@ -31,6 +31,18 @@ function nowMs() {
   return Date.now();
 }
 
+function toKebabSlug(value: string) {
+  const normalized = value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized || `project-${nowMs()}`;
+}
+
 function getDefaultAdminUsername() {
   return process.env.ADMIN_USERNAME || "admin";
 }
@@ -522,16 +534,30 @@ export async function upsertCompanyRecord(input: Omit<InsertCompany, "createdAt"
   return Number(inserted[0].insertId);
 }
 
-export async function upsertProjectRecord(input: Omit<InsertProject, "createdAt" | "updatedAt"> & { id?: number }) {
+export async function upsertProjectRecord(input: Omit<InsertProject, "createdAt" | "updatedAt" | "slug"> & { id?: number; slug?: string | null }) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
+  let resolvedSlug = input.slug?.trim();
+
+  if (!resolvedSlug && input.id) {
+    const [existingProject] = await db.select().from(projects).where(eq(projects.id, input.id)).limit(1);
+    resolvedSlug = existingProject?.slug;
+  }
+
+  if (!resolvedSlug) {
+    resolvedSlug = `${toKebabSlug(input.name)}-${input.companyId}`;
+  }
+
   if (input.id) {
-    await db.update(projects).set({ ...input, address: input.address ?? null }).where(eq(projects.id, input.id));
+    await db
+      .update(projects)
+      .set({ ...input, slug: resolvedSlug, address: input.address ?? null })
+      .where(eq(projects.id, input.id));
     return input.id;
   }
 
-  const inserted = await db.insert(projects).values({ ...input, address: input.address ?? null });
+  const inserted = await db.insert(projects).values({ ...input, slug: resolvedSlug, address: input.address ?? null });
   return Number(inserted[0].insertId);
 }
 
@@ -546,6 +572,37 @@ export async function upsertResidentRecord(input: Omit<InsertResident, "createdA
 
   const inserted = await db.insert(residents).values({ ...input, note: input.note ?? null });
   return Number(inserted[0].insertId);
+}
+
+export async function deleteCompanyRecord(companyId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const [projectUsage] = await db.select({ used: count(projects.id) }).from(projects).where(eq(projects.companyId, companyId));
+  const [residentUsage] = await db.select({ used: count(residents.id) }).from(residents).where(eq(residents.companyId, companyId));
+  const [linkUsage] = await db.select({ used: count(bookingLinks.id) }).from(bookingLinks).where(eq(bookingLinks.companyId, companyId));
+  const [slotUsage] = await db.select({ used: count(bookingSlots.id) }).from(bookingSlots).where(eq(bookingSlots.companyId, companyId));
+  const [bookingUsage] = await db.select({ used: count(bookings.id) }).from(bookings).where(eq(bookings.companyId, companyId));
+
+  if ((projectUsage?.used ?? 0) > 0 || (residentUsage?.used ?? 0) > 0 || (linkUsage?.used ?? 0) > 0 || (slotUsage?.used ?? 0) > 0 || (bookingUsage?.used ?? 0) > 0) {
+    throw new Error("此公司底下仍有建案、住戶、連結、時段或預約資料，請先清除下層資料再刪除公司");
+  }
+
+  await db.delete(companies).where(eq(companies.id, companyId));
+  return companyId;
+}
+
+export async function deleteResidentRecord(residentId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const [bookingUsage] = await db.select({ used: count(bookings.id) }).from(bookings).where(eq(bookings.residentId, residentId));
+  if ((bookingUsage?.used ?? 0) > 0) {
+    throw new Error("此住戶已存在預約紀錄，為了保留歷程，不能直接刪除");
+  }
+
+  await db.delete(residents).where(eq(residents.id, residentId));
+  return residentId;
 }
 
 export async function upsertBookingLinkRecord(input: Omit<InsertBookingLink, "createdAt" | "updatedAt"> & { id?: number }) {

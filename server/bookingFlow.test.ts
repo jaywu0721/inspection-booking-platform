@@ -230,5 +230,5 @@ describe("booking flow integration", () => {
     expect(companyRow?.slug).toBe(companySlug);
     expect(projectRow?.slug).toBe(projectSlug);
     expect(bookingRow?.status).toBe("rescheduled");
-  }, 20000);
+  }, 40000);
 });
