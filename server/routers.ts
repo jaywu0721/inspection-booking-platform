@@ -11,6 +11,7 @@ import {
 import {
   createBookingRecord,
   deleteCompanyRecord,
+  deleteProjectRecord,
   deleteResidentRecord,
   getAdminDashboardData,
   getAdminProfile,
@@ -192,6 +193,13 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         requireAdmin(ctx.req.headers);
         await deleteCompanyRecord(input.id);
+        return { success: true } as const;
+      }),
+    deleteProject: publicProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        await deleteProjectRecord(input.id);
         return { success: true } as const;
       }),
     deleteResident: publicProcedure

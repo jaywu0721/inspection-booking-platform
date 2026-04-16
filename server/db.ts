@@ -592,6 +592,23 @@ export async function deleteCompanyRecord(companyId: number) {
   return companyId;
 }
 
+export async function deleteProjectRecord(projectId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const [residentUsage] = await db.select({ used: count(residents.id) }).from(residents).where(eq(residents.projectId, projectId));
+  const [linkUsage] = await db.select({ used: count(bookingLinks.id) }).from(bookingLinks).where(eq(bookingLinks.projectId, projectId));
+  const [slotUsage] = await db.select({ used: count(bookingSlots.id) }).from(bookingSlots).where(eq(bookingSlots.projectId, projectId));
+  const [bookingUsage] = await db.select({ used: count(bookings.id) }).from(bookings).where(eq(bookings.projectId, projectId));
+
+  if ((residentUsage?.used ?? 0) > 0 || (linkUsage?.used ?? 0) > 0 || (slotUsage?.used ?? 0) > 0 || (bookingUsage?.used ?? 0) > 0) {
+    throw new Error("此建案底下仍有住戶、連結、時段或預約資料，請先清除下層資料再刪除建案");
+  }
+
+  await db.delete(projects).where(eq(projects.id, projectId));
+  return projectId;
+}
+
 export async function deleteResidentRecord(residentId: number) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");

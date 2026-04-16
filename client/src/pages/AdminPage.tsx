@@ -77,7 +77,7 @@ export default function AdminPage() {
   });
   const [bookingFilters, setBookingFilters] = useState({ projectId: "", unitNumber: "", bookingType: "all", status: "all" });
   const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", newSlotId: "", note: "" });
-  const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "resident"; id: number; label: string }>(null);
+  const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident"; id: number; label: string }>(null);
 
   const adminProfile = trpc.adminAuth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
   const dashboardQuery = trpc.admin.dashboard.useQuery(undefined, {
@@ -191,6 +191,16 @@ export default function AdminPage() {
     onError: error => toast.error(error.message),
   });
 
+  const projectDeleteMutation = trpc.admin.deleteProject.useMutation({
+    onSuccess: async () => {
+      toast.success("建案資料已刪除");
+      setDeleteTarget(null);
+      setProjectForm({ companyId: "", name: "", unitFormatHint: "", houseNumberExample: "", address: "" });
+      await refreshAll();
+    },
+    onError: error => toast.error(error.message),
+  });
+
   const residentDeleteMutation = trpc.admin.deleteResident.useMutation({
     onSuccess: async () => {
       toast.success("住戶資料已刪除");
@@ -238,6 +248,11 @@ export default function AdminPage() {
 
     if (deleteTarget.type === "company") {
       await companyDeleteMutation.mutateAsync({ id: deleteTarget.id });
+      return;
+    }
+
+    if (deleteTarget.type === "project") {
+      await projectDeleteMutation.mutateAsync({ id: deleteTarget.id });
       return;
     }
 
@@ -410,8 +425,19 @@ export default function AdminPage() {
                   <CardHeader><CardTitle>既有建案</CardTitle></CardHeader>
                   <CardContent className="overflow-x-auto">
                     <Table>
-                      <TableHeader><TableRow><TableHead>建案</TableHead><TableHead>公司 ID</TableHead><TableHead>戶號範例</TableHead></TableRow></TableHeader>
-                      <TableBody>{projects.map(project => <TableRow key={project.id}><TableCell>{project.name}</TableCell><TableCell>{project.companyId}</TableCell><TableCell>{project.houseNumberExample}</TableCell></TableRow>)}</TableBody>
+                      <TableHeader><TableRow><TableHead>建案</TableHead><TableHead>公司 ID</TableHead><TableHead>戶號範例</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                        {projects.map(project => (
+                          <TableRow key={project.id}>
+                            <TableCell>{project.name}</TableCell>
+                            <TableCell>{project.companyId}</TableCell>
+                            <TableCell>{project.houseNumberExample}</TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "project", id: project.id, label: project.name })}>刪除</Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
                     </Table>
                   </CardContent>
                 </Card>
