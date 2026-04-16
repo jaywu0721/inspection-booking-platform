@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { redirectToAdminDashboardAfterLogin } from "@/lib/adminRedirect";
 import { DEFAULT_SLOT_PRESETS, createProjectSlug } from "@/lib/adminConfig";
+import { buildBookingLinkUrlMap, filterResidentsByProject } from "@/lib/adminDashboard";
+import { getProjectsForCompany, parsePositiveId, validateResidentForm } from "@/lib/adminForms";
 import { buildCompanyFormFromRecord, createEmptyCompanyForm } from "@/lib/companyEditor";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -12,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, LockKeyhole, Building2, CalendarRange, ClipboardList, Users, ArrowRightLeft } from "lucide-react";
+import { Loader2, LockKeyhole, Building2, CalendarRange, ClipboardList, Users, ArrowRightLeft, ArrowLeft, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
 function formatDateTime(value: string | number | Date) {
@@ -89,6 +91,7 @@ export default function AdminPage() {
   });
   const [bookingFilters, setBookingFilters] = useState({ projectId: "", unitNumber: "", bookingType: "all", status: "all" });
   const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", newSlotId: "", note: "" });
+  const [residentListProjectId, setResidentListProjectId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link"; id: number; label: string; step: 1 | 2 }>(null);
 
   const adminProfile = trpc.adminAuth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
@@ -164,7 +167,10 @@ export default function AdminPage() {
       await refreshAll();
       setResidentForm({ companyId: "", projectId: "", unitNumber: "", phoneNumber: "", note: "" });
     },
-    onError: error => toast.error(error.message),
+    onError: error => {
+      const isMissingSelectionError = error.message.includes("companyId") || error.message.includes("projectId");
+      toast.error(isMissingSelectionError ? "請先選擇公司與建案，再儲存住戶資料" : error.message);
+    },
   });
 
   const linkMutation = trpc.admin.saveLink.useMutation({
@@ -241,7 +247,10 @@ export default function AdminPage() {
   });
 
   const projectOptions = useMemo(() => projects.map(project => ({ value: String(project.id), label: project.name })), [projects]);
+  const residentProjectOptions = useMemo(() => getProjectsForCompany(projects, residentForm.companyId), [projects, residentForm.companyId]);
   const projectNameById = useMemo(() => new Map(projects.map(project => [project.id, project.name])), [projects]);
+  const filteredResidents = useMemo(() => filterResidentsByProject(residents, residentListProjectId), [residents, residentListProjectId]);
+  const bookingLinkUrlById = useMemo(() => buildBookingLinkUrlMap({ origin: window.location.origin, companies, projects, links }), [companies, projects, links]);
   const isDeleting = companyDeleteMutation.isPending || projectDeleteMutation.isPending || residentDeleteMutation.isPending || linkDeleteMutation.isPending;
 
 
@@ -272,6 +281,34 @@ export default function AdminPage() {
 
   const cancelEditingLink = () => {
     setLinkForm(createEmptyLinkForm());
+  };
+
+  const saveResident = () => {
+    const validationMessage = validateResidentForm(residentForm, projects);
+    if (validationMessage) {
+      toast.error(validationMessage);
+      return;
+    }
+
+    residentMutation.mutate({
+      ...residentForm,
+      companyId: parsePositiveId(residentForm.companyId) as number,
+      projectId: parsePositiveId(residentForm.projectId) as number,
+    });
+  };
+
+  const copyBookingLink = async (url: string | null) => {
+    if (!url) {
+      toast.error("這筆連結缺少公司或建案 slug，暫時無法產生網址");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("預約連結已複製，可直接傳給客戶");
+    } catch {
+      toast.error("瀏覽器無法直接複製，請手動複製畫面上的網址");
+    }
   };
 
   const createPresetSlots = async () => {
@@ -355,27 +392,34 @@ export default function AdminPage() {
               </div>
             </div>
           </div>
-          <Card className="border-white/10 bg-white/92 text-card-foreground shadow-2xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><LockKeyhole className="h-5 w-5" /> 管理員登入</CardTitle>
-              <CardDescription>目前系統採單一管理員帳密。正式站不應長期使用預設帳密，後續必須改成你的正式憑證。</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="admin-username">帳號</Label>
-                <Input id="admin-username" value={credentials.username} onChange={event => setCredentials(current => ({ ...current, username: event.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="admin-password">密碼</Label>
-                <Input id="admin-password" type="password" value={credentials.password} onChange={event => setCredentials(current => ({ ...current, password: event.target.value }))} />
-              </div>
-              <Button className="w-full" onClick={() => loginMutation.mutate(credentials)} disabled={loginMutation.isPending}>
-                {loginMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                登入後台
-              </Button>
-              <p className="text-xs leading-6 text-muted-foreground">請輸入你設定在正式環境中的單一管理員帳密。系統不會在畫面上展示任何預設憑證。</p>
-            </CardContent>
-          </Card>
+              <Card className="border-white/10 bg-white/92 text-card-foreground shadow-2xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><LockKeyhole className="h-5 w-5" /> 管理員登入</CardTitle>
+                  <CardDescription>目前系統採單一管理員帳密。正式站不應長期使用預設帳密，後續必須改成你的正式憑證。</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-username">帳號</Label>
+                    <Input id="admin-username" value={credentials.username} onChange={event => setCredentials(current => ({ ...current, username: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-password">密碼</Label>
+                    <Input id="admin-password" type="password" value={credentials.password} onChange={event => setCredentials(current => ({ ...current, password: event.target.value }))} />
+                  </div>
+                  <Button className="w-full" onClick={() => loginMutation.mutate(credentials)} disabled={loginMutation.isPending}>
+                    {loginMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    登入後台
+                  </Button>
+                  <Button asChild variant="outline" className="w-full">
+                    <a href="/">
+                      <ArrowLeft className="h-4 w-4" />
+                      返回首頁
+                    </a>
+                  </Button>
+                  <p className="text-xs leading-6 text-muted-foreground">請輸入你設定在正式環境中的單一管理員帳密。系統不會在畫面上展示任何預設憑證。</p>
+                </CardContent>
+              </Card>
+
         </div>
       </div>
     );
@@ -507,22 +551,37 @@ export default function AdminPage() {
                 <Card>
                   <CardHeader><CardTitle>住戶資料管理</CardTitle><CardDescription>你現在要求逐筆新增。這樣做的風險是戶數一多時建立成本很高，之後最好補 CSV 匯入，不然正式案量一上來會卡死。</CardDescription></CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={residentForm.companyId} onChange={event => setResidentForm(current => ({ ...current, companyId: event.target.value }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
-                    <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={residentForm.projectId} onChange={event => setResidentForm(current => ({ ...current, projectId: event.target.value }))}><option value="">請選擇</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
+                    <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={residentForm.companyId} onChange={event => setResidentForm(current => ({ ...current, companyId: event.target.value, projectId: "" }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
+                    <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={residentForm.projectId} onChange={event => setResidentForm(current => ({ ...current, projectId: event.target.value }))} disabled={!residentForm.companyId}><option value="">{residentForm.companyId ? "請選擇" : "請先選公司"}</option>{residentProjectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>標準戶號</Label><Input value={residentForm.unitNumber} onChange={event => setResidentForm(current => ({ ...current, unitNumber: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>手機號碼</Label><Input value={residentForm.phoneNumber} onChange={event => setResidentForm(current => ({ ...current, phoneNumber: event.target.value }))} /></div>
                     <div className="space-y-2 md:col-span-2"><Label>備註</Label><Textarea value={residentForm.note} onChange={event => setResidentForm(current => ({ ...current, note: event.target.value }))} /></div>
-                    <div className="md:col-span-2"><Button onClick={() => residentMutation.mutate({ ...residentForm, companyId: Number(residentForm.companyId), projectId: Number(residentForm.projectId) })} disabled={residentMutation.isPending}>{residentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}儲存住戶資料</Button></div>
+                    <div className="md:col-span-2 space-y-2"><Button onClick={saveResident} disabled={residentMutation.isPending}>{residentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}儲存住戶資料</Button><p className="text-sm text-muted-foreground">請先選擇公司，再選該公司底下的建案，最後輸入戶號與手機後儲存。</p></div>
                   </CardContent>
                 </Card>
 
                 <Card>
-                  <CardHeader><CardTitle>住戶清單</CardTitle></CardHeader>
-                  <CardContent className="overflow-x-auto">
-                    <Table>
-                      <TableHeader><TableRow><TableHead>戶號</TableHead><TableHead>手機</TableHead><TableHead>建案 ID</TableHead><TableHead>備註</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
-                      <TableBody>{residents.map(resident => <TableRow key={resident.id}><TableCell>{resident.unitNumber}</TableCell><TableCell>{resident.phoneNumber}</TableCell><TableCell>{resident.projectId}</TableCell><TableCell>{resident.note || "-"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "resident", id: resident.id, label: resident.unitNumber, step: 1 })}>刪除</Button></TableCell></TableRow>)}</TableBody>
-                    </Table>
+                  <CardHeader>
+                    <CardTitle>住戶清單</CardTitle>
+                    <CardDescription>這裡已改成可依建案篩選。這樣做的風險是如果你不先選建案，案量一大時仍然會難找，因此預設保留全部，但提供立即縮小清單的入口。</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-[minmax(0,260px)_1fr] md:items-end">
+                      <div className="space-y-2">
+                        <Label>依建案篩選</Label>
+                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={residentListProjectId} onChange={event => setResidentListProjectId(event.target.value)}>
+                          <option value="">全部建案</option>
+                          {projectOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                      </div>
+                      <p className="text-sm text-muted-foreground">目前顯示 {filteredResidents.length} 筆住戶資料。</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader><TableRow><TableHead>建案</TableHead><TableHead>戶號</TableHead><TableHead>手機</TableHead><TableHead>備註</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
+                        <TableBody>{filteredResidents.length ? filteredResidents.map(resident => <TableRow key={resident.id}><TableCell>{projectNameById.get(resident.projectId) || `建案 ${resident.projectId}`}</TableCell><TableCell>{resident.unitNumber}</TableCell><TableCell>{resident.phoneNumber}</TableCell><TableCell>{resident.note || "-"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "resident", id: resident.id, label: resident.unitNumber, step: 1 })}>刪除</Button></TableCell></TableRow>) : <TableRow><TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">目前篩選條件下沒有住戶資料。</TableCell></TableRow>}</TableBody>
+                      </Table>
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -569,10 +628,10 @@ export default function AdminPage() {
                 </Card>
 
                 <Card>
-                  <CardHeader><CardTitle>目前連結與時段</CardTitle></CardHeader>
+                  <CardHeader><CardTitle>目前連結與時段</CardTitle><CardDescription>你已經建立連結卻拿不到網址，這就是交付斷點。現在每筆已啟用或已停止的連結都會直接顯示可分享網址，方便你複製給客戶。</CardDescription></CardHeader>
                   <CardContent className="grid gap-6 xl:grid-cols-2">
                     <div className="overflow-x-auto">
-                      <Table><TableHeader><TableRow><TableHead>建案</TableHead><TableHead>類型</TableHead><TableHead>狀態</TableHead><TableHead>停用原因</TableHead><TableHead>啟用期間</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{links.map(link => <TableRow key={link.id}><TableCell>{projectNameById.get(link.projectId) || `建案 ${link.projectId}`}</TableCell><TableCell>{link.type}</TableCell><TableCell><Badge variant={link.isEnabled ? "outline" : "secondary"}>{link.isEnabled ? "啟用中" : "已停止"}</Badge></TableCell><TableCell>{link.disabledReason || "-"}</TableCell><TableCell>{formatDateTime(link.startsAt)} ~ {formatDateTime(link.endsAt)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingLink(link)}>編輯</Button><Button variant="outline" size="sm" onClick={() => toggleLinkEnabledMutation.mutate({ id: link.id, isEnabled: !link.isEnabled, disabledReason: link.disabledReason || "此連結已由後台停止" })} disabled={toggleLinkEnabledMutation.isPending}>{link.isEnabled ? "停止" : "重新啟用"}</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "link", id: link.id, label: `${projectNameById.get(link.projectId) || `建案 ${link.projectId}`} / ${link.type}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>)}</TableBody></Table>
+                      <Table><TableHeader><TableRow><TableHead>建案</TableHead><TableHead>類型</TableHead><TableHead>狀態</TableHead><TableHead>分享網址</TableHead><TableHead>停用原因</TableHead><TableHead>啟用期間</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{links.map(link => { const bookingUrl = bookingLinkUrlById.get(link.id) ?? null; return <TableRow key={link.id}><TableCell>{projectNameById.get(link.projectId) || `建案 ${link.projectId}`}</TableCell><TableCell>{link.type}</TableCell><TableCell><Badge variant={link.isEnabled ? "outline" : "secondary"}>{link.isEnabled ? "啟用中" : "已停止"}</Badge></TableCell><TableCell className="min-w-[260px]"><div className="space-y-2"><p className="break-all text-xs text-muted-foreground">{bookingUrl || "缺少 company/project slug，暫時無法產生連結"}</p>{bookingUrl ? <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => copyBookingLink(bookingUrl)}><Copy className="h-4 w-4" />複製</Button><Button asChild variant="outline" size="sm"><a href={bookingUrl} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />開啟</a></Button></div> : null}</div></TableCell><TableCell>{link.disabledReason || "-"}</TableCell><TableCell>{formatDateTime(link.startsAt)} ~ {formatDateTime(link.endsAt)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingLink(link)}>編輯</Button><Button variant="outline" size="sm" onClick={() => toggleLinkEnabledMutation.mutate({ id: link.id, isEnabled: !link.isEnabled, disabledReason: link.disabledReason || "此連結已由後台停止" })} disabled={toggleLinkEnabledMutation.isPending}>{link.isEnabled ? "停止" : "重新啟用"}</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "link", id: link.id, label: `${projectNameById.get(link.projectId) || `建案 ${link.projectId}`} / ${link.type}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>; })}</TableBody></Table>
                     </div>
                     <div className="overflow-x-auto">
                       <Table><TableHeader><TableRow><TableHead>建案 ID</TableHead><TableHead>日期</TableHead><TableHead>時段</TableHead><TableHead>名額</TableHead></TableRow></TableHeader><TableBody>{slots.map(slot => <TableRow key={slot.id}><TableCell>{slot.projectId}</TableCell><TableCell>{formatDateTime(slot.slotDate)}</TableCell><TableCell>{slot.startLabel} - {slot.endLabel}</TableCell><TableCell>{slot.capacity}</TableCell></TableRow>)}</TableBody></Table>
