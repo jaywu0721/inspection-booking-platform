@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
   const toastError = vi.fn();
   const verifyMutateAsync = vi.fn();
   const createBookingMutateAsync = vi.fn();
+  const getContextUseQuery = vi.fn();
 
   const site = {
     company: {
@@ -67,6 +68,7 @@ const mocks = vi.hoisted(() => {
     toastError,
     verifyMutateAsync,
     createBookingMutateAsync,
+    getContextUseQuery,
     site,
   };
 });
@@ -82,7 +84,7 @@ vi.mock("@/lib/trpc", () => ({
   trpc: {
     publicSite: {
       getContext: {
-        useQuery: () => ({ data: mocks.site, isLoading: false, error: null }),
+        useQuery: (...args: unknown[]) => mocks.getContextUseQuery(...args),
       },
       verifyResident: {
         useMutation: (options?: { onSuccess?: (result: unknown) => void; onError?: (error: Error) => void }) => ({
@@ -125,6 +127,8 @@ describe("home booking guard ui", () => {
     mocks.toastError.mockClear();
     mocks.verifyMutateAsync.mockClear();
     mocks.createBookingMutateAsync.mockClear();
+    mocks.getContextUseQuery.mockReset();
+    mocks.getContextUseQuery.mockReturnValue({ data: mocks.site, isLoading: false, error: null });
     mocks.verifyMutateAsync.mockResolvedValue({
       resident: {
         id: 501,
@@ -174,6 +178,19 @@ describe("home booking guard ui", () => {
     expect(screen.getByText(/你已預約時間：.*09:00.*10:30/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "送出預約" })).toBeNull();
     expect(mocks.createBookingMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("shows a clean empty state instead of throwing an api error when no booking page params exist", async () => {
+    window.history.replaceState({}, "", "/?from_webdev=1");
+    const { default: Home } = await import("../client/src/pages/Home");
+
+    render(createElement(Home));
+
+    expect(screen.getByText("目前尚未建立可公開預約的建案頁面")).toBeTruthy();
+    expect(mocks.getContextUseQuery).toHaveBeenCalledWith(
+      { companySlug: "", projectSlug: "", type: "initial" },
+      expect.objectContaining({ enabled: false })
+    );
   });
 
   it("scrolls to the booking section after mobile verification succeeds", async () => {

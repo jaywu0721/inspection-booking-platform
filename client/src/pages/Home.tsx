@@ -42,20 +42,34 @@ function parseBookingErrorMessage(message: string) {
 }
 
 export default function Home() {
-  const params = useMemo(() => {
+  const pageRequest = useMemo(() => {
     const search = new URLSearchParams(window.location.search);
     const linkToken = search.get("link") || undefined;
+    const companySlug = search.get("company") || undefined;
+    const projectSlug = search.get("project") || undefined;
+    const type = (search.get("type") === "reinspect" ? "reinspect" : "initial") as "initial" | "reinspect";
 
     if (linkToken) {
-      return { linkToken };
+      return {
+        hasBookingTarget: true,
+        params: { linkToken },
+      };
+    }
+
+    if (companySlug && projectSlug) {
+      return {
+        hasBookingTarget: true,
+        params: { companySlug, projectSlug, type },
+      };
     }
 
     return {
-      companySlug: search.get("company") || "yisin",
-      projectSlug: search.get("project") || "yisin-demo",
-      type: (search.get("type") === "reinspect" ? "reinspect" : "initial") as "initial" | "reinspect",
+      hasBookingTarget: false,
+      params: { companySlug: "", projectSlug: "", type },
     };
   }, []);
+  const params = pageRequest.params;
+  const hasBookingTarget = pageRequest.hasBookingTarget;
 
   const [unitNumber, setUnitNumber] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -68,6 +82,7 @@ export default function Home() {
 
   const siteQuery = trpc.publicSite.getContext.useQuery(params, {
     refetchOnWindowFocus: false,
+    enabled: hasBookingTarget,
   });
 
   const verifyMutation = trpc.publicSite.verifyResident.useMutation({
@@ -167,6 +182,29 @@ export default function Home() {
       hasInspectionCompany,
     });
   };
+
+  if (!hasBookingTarget) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
+        <Card className="w-full max-w-2xl">
+          <CardHeader>
+            <CardTitle>目前尚未建立可公開預約的建案頁面</CardTitle>
+            <CardDescription>
+              這不是住戶操作錯誤。你先前要求把後台測試資料清空後，首頁如果沒有帶完整預約連結，就不應再硬查不存在的示範建案。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm text-muted-foreground">
+            <p>請先到後台建立正式建案與預約連結，再使用系統產生的完整分享網址開啟前台預約頁。</p>
+            <div className="flex flex-wrap gap-3">
+              <Button asChild>
+                <a href="/admin">進入後台管理</a>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (siteQuery.isLoading) {
     return (
