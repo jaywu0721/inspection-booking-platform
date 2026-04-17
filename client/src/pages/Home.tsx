@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,26 @@ function formatDate(dateValue: string | Date) {
   });
 }
 
+function getDateKey(dateValue: string | Date) {
+  return new Date(dateValue).toISOString().slice(0, 10);
+}
+
+function parseBookingErrorMessage(message: string) {
+  try {
+    const parsed = JSON.parse(message);
+    if (Array.isArray(parsed)) {
+      const gmailRequiredIssue = parsed.find(issue => issue?.path?.[0] === "gmail" && issue?.message === "請填寫信箱");
+      if (gmailRequiredIssue?.message) {
+        return gmailRequiredIssue.message;
+      }
+    }
+  } catch {
+    return message;
+  }
+
+  return message;
+}
+
 export default function Home() {
   const params = useMemo(() => {
     const search = new URLSearchParams(window.location.search);
@@ -41,8 +61,10 @@ export default function Home() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [gmail, setGmail] = useState("");
   const [slotId, setSlotId] = useState<number | null>(null);
+  const [selectedSlotDate, setSelectedSlotDate] = useState("");
   const [hasInspectionCompany, setHasInspectionCompany] = useState(false);
   const [verificationResult, setVerificationResult] = useState<any>(null);
+  const bookingSectionRef = useRef<HTMLDivElement | null>(null);
 
   const siteQuery = trpc.publicSite.getContext.useQuery(params, {
     refetchOnWindowFocus: false,
@@ -51,7 +73,14 @@ export default function Home() {
   const verifyMutation = trpc.publicSite.verifyResident.useMutation({
     onSuccess: result => {
       setVerificationResult(result);
+      setSelectedSlotDate("");
+      setSlotId(null);
       toast.success("驗證成功，已載入既有預約與可用時段");
+      if (typeof window !== "undefined" && window.innerWidth < 1024) {
+        window.requestAnimationFrame(() => {
+          bookingSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }
     },
     onError: error => {
       setVerificationResult(null);
@@ -72,14 +101,37 @@ export default function Home() {
       setGmail("");
       setHasInspectionCompany(false);
       setSlotId(null);
+      setSelectedSlotDate("");
     },
     onError: error => {
-      toast.error(error.message);
+      toast.error(parseBookingErrorMessage(error.message));
     },
   });
 
   const site = siteQuery.data;
+  const availableSlots: any[] = verificationResult?.site.availableSlots ?? site?.availableSlots ?? [];
+  const availableDates: Array<{ key: string; label: string; count: number }> = Array.from(
+    availableSlots.reduce((map, slot) => {
+      const key = getDateKey(slot.slotDate);
+      const current = map.get(key);
+      if (current) {
+        current.count += 1;
+        return map;
+      }
+      map.set(key, { key, label: formatDate(slot.slotDate), count: 1 });
+      return map;
+    }, new Map<string, { key: string; label: string; count: number }>()).values()
+  );
+  const visibleSlots = selectedSlotDate
+    ? availableSlots.filter(slot => getDateKey(slot.slotDate) === selectedSlotDate)
+    : [];
   const sameLinkExistingBooking = verificationResult?.existingBookings?.find((booking: any) => booking.linkId === site?.link.id) ?? null;
+
+  useEffect(() => {
+    if (slotId && !visibleSlots.some(slot => slot.id === slotId)) {
+      setSlotId(null);
+    }
+  }, [slotId, visibleSlots]);
 
   const submitVerification = async () => {
     await verifyMutation.mutateAsync({
@@ -94,8 +146,16 @@ export default function Home() {
       toast.error("請先完成住戶驗證");
       return;
     }
+    if (!selectedSlotDate) {
+      toast.error("請先選擇預約日期");
+      return;
+    }
     if (!slotId) {
       toast.error("請先選擇預約時段");
+      return;
+    }
+    if (!gmail.trim()) {
+      toast.error("請填寫信箱");
       return;
     }
 
@@ -144,7 +204,6 @@ export default function Home() {
 
   const company = site.company;
   const project = site.project;
-  const availableSlots: any[] = verificationResult?.site.availableSlots ?? site.availableSlots ?? [];
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f4f1ea_0%,#ffffff_38%,#f8f7f4_100%)] text-foreground">
@@ -284,10 +343,10 @@ export default function Home() {
           </div>
 
           <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-            <Card className="border-border/70 shadow-lg">
+            <Card ref={bookingSectionRef} className="border-border/70 shadow-lg">
               <CardHeader>
                 <CardTitle>預約查詢與送出</CardTitle>
-                <CardDescription>驗證成功後，這一區會顯示既有紀錄與可用時段。</CardDescription>
+                <CardDescription>驗證成功後，這一區會先顯示可預約日期，再由你進一步選擇該日期可用時段。</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {!verificationResult ? (
@@ -346,31 +405,75 @@ export default function Home() {
                           </Alert>
                         ) : (
                           <>
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                               {availableSlots.length === 0 ? (
                                 <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">目前尚未開放可用時段，請聯絡窗口安排。</div>
                               ) : (
-                                availableSlots.map((slot: any) => {
-                                  const isFull = slot.remaining <= 0;
-                                  const isSelected = slotId === slot.id;
-                                  return (
-                                    <button
-                                      key={slot.id}
-                                      type="button"
-                                      onClick={() => !isFull && setSlotId(slot.id)}
-                                      className={`w-full rounded-2xl border p-4 text-left transition ${isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border/80 hover:border-primary/40"} ${isFull ? "cursor-not-allowed opacity-55" : ""}`}
-                                      disabled={isFull}
-                                    >
-                                      <div className="flex items-center justify-between gap-3">
-                                        <div>
-                                          <p className="font-medium">{formatDate(slot.slotDate)}</p>
-                                          <p className="text-sm text-muted-foreground">{slot.startLabel} - {slot.endLabel}</p>
-                                        </div>
-                                        <Badge variant={isFull ? "destructive" : "secondary"}>{isFull ? "已額滿" : `剩餘 ${slot.remaining} 名`}</Badge>
+                                <>
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <h4 className="font-medium">第一步：先選擇日期</h4>
+                                      <Badge variant="secondary">{availableDates.length} 天</Badge>
+                                    </div>
+                                    <div className="space-y-3">
+                                      {availableDates.map(dateOption => {
+                                        const isSelectedDate = selectedSlotDate === dateOption.key;
+                                        return (
+                                          <button
+                                            key={dateOption.key}
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedSlotDate(dateOption.key);
+                                              setSlotId(null);
+                                            }}
+                                            className={`w-full rounded-2xl border p-4 text-left transition ${isSelectedDate ? "border-primary bg-primary/5 shadow-sm" : "border-border/80 hover:border-primary/40"}`}
+                                          >
+                                            <div className="flex items-center justify-between gap-3">
+                                              <div>
+                                                <p className="font-medium">{dateOption.label}</p>
+                                                <p className="text-sm text-muted-foreground">點選後顯示該日期可預約時段</p>
+                                              </div>
+                                              <Badge variant={isSelectedDate ? "default" : "secondary"}>{dateOption.count} 個時段</Badge>
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <h4 className="font-medium">第二步：選擇時間</h4>
+                                      {selectedSlotDate ? <Badge variant="outline">{formatDate(selectedSlotDate)}</Badge> : null}
+                                    </div>
+                                    {!selectedSlotDate ? (
+                                      <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">請先選擇日期，再查看該日期可預約時間。</div>
+                                    ) : (
+                                      <div className="space-y-3">
+                                        {visibleSlots.map((slot: any) => {
+                                          const isFull = slot.remaining <= 0;
+                                          const isSelected = slotId === slot.id;
+                                          return (
+                                            <button
+                                              key={slot.id}
+                                              type="button"
+                                              onClick={() => !isFull && setSlotId(slot.id)}
+                                              className={`w-full rounded-2xl border p-4 text-left transition ${isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border/80 hover:border-primary/40"} ${isFull ? "cursor-not-allowed opacity-55" : ""}`}
+                                              disabled={isFull}
+                                            >
+                                              <div className="flex items-center justify-between gap-3">
+                                                <div>
+                                                  <p className="font-medium">{slot.startLabel} - {slot.endLabel}</p>
+                                                  <p className="text-sm text-muted-foreground">{formatDate(slot.slotDate)}</p>
+                                                </div>
+                                                <Badge variant={isFull ? "destructive" : "secondary"}>{isFull ? "已額滿" : `剩餘 ${slot.remaining} 名`}</Badge>
+                                              </div>
+                                            </button>
+                                          );
+                                        })}
                                       </div>
-                                    </button>
-                                  );
-                                })
+                                    )}
+                                  </div>
+                                </>
                               )}
                             </div>
                             <div className="space-y-2">

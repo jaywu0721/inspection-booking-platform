@@ -11,6 +11,7 @@ import {
 import {
   createBookingRecord,
   deleteBookingLinkRecord,
+  deleteBookingSlotRecord,
   deleteCompanyRecord,
   deleteProjectRecord,
   deleteResidentRecord,
@@ -76,9 +77,14 @@ export const appRouter = router({
         publicSiteLocatorSchema.safeExtend({
           residentId: z.number().int().positive(),
           slotId: z.number().int().positive(),
-          gmail: z.string().email().refine(value => value.endsWith("@gmail.com"), {
-            message: "請填寫 Gmail 信箱",
-          }),
+          gmail: z
+            .string()
+            .trim()
+            .min(1, { message: "請填寫信箱" })
+            .email({ message: "請填寫有效的 Email 信箱" })
+            .refine(value => value.endsWith("@gmail.com"), {
+              message: "請填寫 Gmail 信箱",
+            }),
           hasInspectionCompany: z.boolean(),
         })
       )
@@ -266,6 +272,13 @@ export const appRouter = router({
         const id = await upsertBookingSlotRecord(input);
         return { success: true, id } as const;
       }),
+    deleteSlot: publicProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        await deleteBookingSlotRecord(input.id);
+        return { success: true } as const;
+      }),
     searchBookings: publicProcedure
       .input(
         z.object({
@@ -273,6 +286,7 @@ export const appRouter = router({
           unitNumber: z.string().optional(),
           bookingType: bookingTypeSchema.optional(),
           status: bookingStatusSchema.optional(),
+          bookingDate: z.string().optional(),
         })
       )
       .query(({ ctx, input }) => {

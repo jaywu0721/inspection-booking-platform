@@ -18,7 +18,6 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, LockKeyhole, Building2, CalendarRange, ClipboardList, Users, ArrowRightLeft, ArrowLeft, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-
 function formatDateTime(value: string | number | Date) {
   return new Date(value).toLocaleString("zh-TW", {
     year: "numeric",
@@ -29,8 +28,22 @@ function formatDateTime(value: string | number | Date) {
   });
 }
 
-function parseFaq(text: string) {
-  return text
+function formatDateOnly(value: string | number | Date) {
+  return new Date(value).toLocaleDateString("zh-TW", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function formatDateTimeInput(value: string | number | Date) {
+  const date = new Date(value);
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function parseFaq(input: string) {
+  return input
     .split("\n")
     .map(line => line.trim())
     .filter(Boolean)
@@ -41,12 +54,6 @@ function parseFaq(text: string) {
         answer: answerParts.join("|").trim() || "請補充回答",
       };
     });
-}
-
-function formatDateTimeInput(value: string | number | Date) {
-  const date = new Date(value);
-  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
 function createEmptyLinkForm() {
@@ -83,6 +90,7 @@ export default function AdminPage() {
   });
   const [linkForm, setLinkForm] = useState(createEmptyLinkForm());
   const [slotForm, setSlotForm] = useState({
+    id: "",
     companyId: "",
     projectId: "",
     linkId: "",
@@ -94,10 +102,10 @@ export default function AdminPage() {
   });
   const [selectedSlotLinkId, setSelectedSlotLinkId] = useState("");
   const [editableSlotPresets, setEditableSlotPresets] = useState(createEditableSlotPresets());
-  const [bookingFilters, setBookingFilters] = useState({ projectId: "", unitNumber: "", bookingType: "all", status: "all" });
-  const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", newSlotId: "", note: "" });
+  const [bookingFilters, setBookingFilters] = useState({ projectId: "", unitNumber: "", bookingType: "all", status: "all", bookingDate: "" });
+  const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", slotDate: "", newSlotId: "", note: "" });
   const [residentListProjectId, setResidentListProjectId] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link"; id: number; label: string; step: 1 | 2 }>(null);
+  const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link" | "slot"; id: number; label: string; step: 1 | 2 }>(null);
 
   const adminProfile = trpc.adminAuth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
   const dashboardQuery = trpc.admin.dashboard.useQuery(undefined, {
@@ -111,6 +119,7 @@ export default function AdminPage() {
       unitNumber: bookingFilters.unitNumber || undefined,
       bookingType: bookingFilters.bookingType === "all" ? undefined : (bookingFilters.bookingType as "initial" | "reinspect"),
       status: bookingFilters.status === "all" ? undefined : (bookingFilters.status as "booked" | "rescheduled" | "cancelled"),
+      bookingDate: bookingFilters.bookingDate || undefined,
     },
     {
       enabled: Boolean(adminProfile.data),
@@ -192,7 +201,17 @@ export default function AdminPage() {
       toast.success("時段已儲存");
       await refreshAll();
       setEditableSlotPresets(createEditableSlotPresets());
-      setSlotForm({ companyId: "", projectId: "", linkId: "", slotDate: "", startLabel: "09:00", endLabel: "10:30", capacity: "1", isActive: true });
+      setSlotForm({ id: "", companyId: "", projectId: "", linkId: "", slotDate: "", startLabel: "09:00", endLabel: "10:30", capacity: "1", isActive: true });
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  const slotDeleteMutation = trpc.admin.deleteSlot.useMutation({
+    onSuccess: async () => {
+      toast.success("時段紀錄已刪除");
+      setDeleteTarget(null);
+      setSlotForm({ id: "", companyId: "", projectId: "", linkId: "", slotDate: "", startLabel: "09:00", endLabel: "10:30", capacity: "1", isActive: true });
+      await refreshAll();
     },
     onError: error => toast.error(error.message),
   });
@@ -201,7 +220,7 @@ export default function AdminPage() {
     onSuccess: async () => {
       toast.success("預約已完成改期");
       await refreshAll();
-      setRescheduleForm({ bookingId: "", newSlotId: "", note: "" });
+      setRescheduleForm({ bookingId: "", slotDate: "", newSlotId: "", note: "" });
     },
     onError: error => toast.error(error.message),
   });
@@ -262,7 +281,32 @@ export default function AdminPage() {
   const filteredResidents = useMemo(() => filterResidentsByProject(residents, residentListProjectId), [residents, residentListProjectId]);
   const filteredSlots = useMemo(() => filterSlotsByLink(slots, selectedSlotLinkId || slotForm.linkId), [slots, selectedSlotLinkId, slotForm.linkId]);
   const bookingLinkUrlById = useMemo(() => buildBookingLinkUrlMap({ origin: window.location.origin, companies, projects, links }), [companies, projects, links]);
-  const isDeleting = companyDeleteMutation.isPending || projectDeleteMutation.isPending || residentDeleteMutation.isPending || linkDeleteMutation.isPending;
+  const editingBooking = useMemo(() => bookings.find(booking => String(booking.id) === rescheduleForm.bookingId) ?? null, [bookings, rescheduleForm.bookingId]);
+  const rescheduleSlots = useMemo(() => {
+    if (!editingBooking?.linkId) return [] as typeof slots;
+    return slots
+      .filter(slot => slot.linkId === editingBooking.linkId && slot.isActive && slot.id !== editingBooking.slotId)
+      .sort((a, b) => {
+        const timeCompare = new Date(a.slotDate).getTime() - new Date(b.slotDate).getTime();
+        if (timeCompare !== 0) return timeCompare;
+        return a.startLabel.localeCompare(b.startLabel, "zh-Hant");
+      });
+  }, [editingBooking, slots]);
+  const rescheduleDateOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return rescheduleSlots.reduce<Array<{ value: string; label: string }>>((result, slot) => {
+      const value = new Date(slot.slotDate).toISOString().slice(0, 10);
+      if (seen.has(value)) return result;
+      seen.add(value);
+      result.push({ value, label: formatDateOnly(slot.slotDate) });
+      return result;
+    }, []);
+  }, [rescheduleSlots]);
+  const rescheduleSlotOptions = useMemo(() => {
+    if (!rescheduleForm.slotDate) return [] as typeof slots;
+    return rescheduleSlots.filter(slot => new Date(slot.slotDate).toISOString().slice(0, 10) === rescheduleForm.slotDate);
+  }, [rescheduleForm.slotDate, rescheduleSlots]);
+  const isDeleting = companyDeleteMutation.isPending || projectDeleteMutation.isPending || residentDeleteMutation.isPending || linkDeleteMutation.isPending || slotDeleteMutation.isPending;
 
 
   const startEditingCompany = (company: typeof companies[number]) => {
@@ -296,6 +340,38 @@ export default function AdminPage() {
 
   const cancelEditingLink = () => {
     setLinkForm(createEmptyLinkForm());
+  };
+
+  const startEditingSlot = (slot: typeof slots[number]) => {
+    setSlotForm({
+      id: String(slot.id),
+      companyId: String(slot.companyId),
+      projectId: String(slot.projectId),
+      linkId: String(slot.linkId ?? ""),
+      slotDate: new Date(slot.slotDate).toISOString().slice(0, 10),
+      startLabel: slot.startLabel,
+      endLabel: slot.endLabel,
+      capacity: String(slot.capacity),
+      isActive: slot.isActive,
+    });
+    setSelectedSlotLinkId(String(slot.linkId ?? ""));
+  };
+
+  const cancelEditingSlot = () => {
+    setSlotForm({ id: "", companyId: "", projectId: "", linkId: "", slotDate: "", startLabel: "09:00", endLabel: "10:30", capacity: "1", isActive: true });
+  };
+
+  const startEditingBooking = (booking: typeof bookings[number]) => {
+    setRescheduleForm({
+      bookingId: String(booking.id),
+      slotDate: new Date(booking.slotDate).toISOString().slice(0, 10),
+      newSlotId: "",
+      note: booking.internalNote || "",
+    });
+  };
+
+  const cancelEditingBooking = () => {
+    setRescheduleForm({ bookingId: "", slotDate: "", newSlotId: "", note: "" });
   };
 
   const saveResident = () => {
@@ -383,6 +459,27 @@ export default function AdminPage() {
     slotMutation.mutate(validation.payload);
   };
 
+  const submitReschedule = () => {
+    if (!rescheduleForm.bookingId) {
+      toast.error("請先選擇要改期的預約紀錄");
+      return;
+    }
+    if (!rescheduleForm.slotDate) {
+      toast.error("請先選擇新的預約日期");
+      return;
+    }
+    if (!rescheduleForm.newSlotId) {
+      toast.error("請先選擇新的預約時段");
+      return;
+    }
+
+    rescheduleMutation.mutate({
+      bookingId: Number(rescheduleForm.bookingId),
+      newSlotId: Number(rescheduleForm.newSlotId),
+      note: rescheduleForm.note || undefined,
+    });
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
 
@@ -403,6 +500,11 @@ export default function AdminPage() {
 
     if (deleteTarget.type === "link") {
       await linkDeleteMutation.mutateAsync({ id: deleteTarget.id });
+      return;
+    }
+
+    if (deleteTarget.type === "slot") {
+      await slotDeleteMutation.mutateAsync({ id: deleteTarget.id });
       return;
     }
 
@@ -657,15 +759,15 @@ export default function AdminPage() {
                 <Card>
                   <CardHeader><CardTitle>時段管理</CardTitle><CardDescription>這裡的原則很單純：時段必須掛在明確的預約連結下，不能再用共用池混著放，不然後面只會把舊時段誤帶到新連結。</CardDescription></CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.companyId} onChange={event => setSlotForm(current => ({ ...current, companyId: event.target.value, projectId: "", linkId: "" }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
-                    <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.projectId} onChange={event => setSlotForm(current => ({ ...current, projectId: event.target.value, linkId: "" }))} disabled={!slotForm.companyId}><option value="">{slotForm.companyId ? "請選擇" : "請先選公司"}</option>{slotProjectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
-                    <div className="space-y-2"><Label>預約連結</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.linkId} onChange={event => { const nextLinkId = event.target.value; setSlotForm(current => ({ ...current, linkId: nextLinkId })); setSelectedSlotLinkId(nextLinkId); }} disabled={!slotForm.projectId}><option value="">{slotForm.projectId ? "請選擇" : "請先選建案"}</option>{slotLinkOptions.map(link => <option key={link.id} value={link.id}>{`${link.type} / #${link.id}${link.isEnabled ? "" : "（已停用）"}`}</option>)}</select></div>
+                    <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.companyId} onChange={event => setSlotForm(current => ({ ...current, id: "", companyId: event.target.value, projectId: "", linkId: "" }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
+                    <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.projectId} onChange={event => setSlotForm(current => ({ ...current, id: "", projectId: event.target.value, linkId: "" }))} disabled={!slotForm.companyId}><option value="">{slotForm.companyId ? "請選擇" : "請先選公司"}</option>{slotProjectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
+                    <div className="space-y-2"><Label>預約連結</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.linkId} onChange={event => { const nextLinkId = event.target.value; setSlotForm(current => ({ ...current, id: current.id, linkId: nextLinkId })); setSelectedSlotLinkId(nextLinkId); }} disabled={!slotForm.projectId}><option value="">{slotForm.projectId ? "請選擇" : "請先選建案"}</option>{slotLinkOptions.map(link => <option key={link.id} value={link.id}>{`${link.type} / #${link.id}${link.isEnabled ? "" : "（已停用）"}`}</option>)}</select></div>
                     <div className="space-y-2"><Label>日期</Label><Input type="date" value={slotForm.slotDate} onChange={event => setSlotForm(current => ({ ...current, slotDate: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>名額</Label><Input type="number" min="1" value={slotForm.capacity} onChange={event => setSlotForm(current => ({ ...current, capacity: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>開始</Label><Input value={slotForm.startLabel} onChange={event => setSlotForm(current => ({ ...current, startLabel: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>結束</Label><Input value={slotForm.endLabel} onChange={event => setSlotForm(current => ({ ...current, endLabel: event.target.value }))} /></div>
                     <div className="flex items-center gap-3 md:col-span-2"><input type="checkbox" checked={slotForm.isActive} onChange={event => setSlotForm(current => ({ ...current, isActive: event.target.checked }))} /><span className="text-sm text-muted-foreground">啟用時段</span></div>
-                    <div className="md:col-span-2"><Button onClick={saveSlot} disabled={slotMutation.isPending}>{slotMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}儲存時段</Button></div>
+                    <div className="md:col-span-2 flex flex-wrap gap-3"><Button onClick={saveSlot} disabled={slotMutation.isPending}>{slotMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{slotForm.id ? "更新時段" : "儲存時段"}</Button>{slotForm.id ? <Button variant="outline" onClick={cancelEditingSlot} disabled={slotMutation.isPending}>取消編輯</Button> : null}</div>
                     <div className="md:col-span-2 rounded-2xl border border-dashed border-border/70 bg-muted/20 p-4">
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div>
@@ -708,7 +810,7 @@ export default function AdminPage() {
                       <Table><TableHeader><TableRow><TableHead>建案</TableHead><TableHead>類型</TableHead><TableHead>狀態</TableHead><TableHead>分享網址</TableHead><TableHead>停用原因</TableHead><TableHead>啟用期間</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{links.map(link => { const bookingUrl = bookingLinkUrlById.get(link.id) ?? null; return <TableRow key={link.id}><TableCell>{projectNameById.get(link.projectId) || `建案 ${link.projectId}`}</TableCell><TableCell>{link.type} / #{link.id}</TableCell><TableCell><Badge variant={link.isEnabled ? "outline" : "secondary"}>{link.isEnabled ? "啟用中" : "已停止"}</Badge></TableCell><TableCell className="min-w-[260px]"><div className="space-y-2"><p className="break-all text-xs text-muted-foreground">{bookingUrl || "缺少 share token，暫時無法產生連結"}</p>{bookingUrl ? <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => copyBookingLink(bookingUrl)}><Copy className="h-4 w-4" />複製</Button><Button asChild variant="outline" size="sm"><a href={bookingUrl} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />開啟</a></Button></div> : null}</div></TableCell><TableCell>{link.disabledReason || "-"}</TableCell><TableCell>{formatDateTime(link.startsAt)} ~ {formatDateTime(link.endsAt)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingLink(link)}>編輯</Button><Button variant="outline" size="sm" onClick={() => toggleLinkEnabledMutation.mutate({ id: link.id, isEnabled: !link.isEnabled, disabledReason: link.disabledReason || "此連結已由後台停止" })} disabled={toggleLinkEnabledMutation.isPending}>{link.isEnabled ? "停止" : "重新啟用"}</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "link", id: link.id, label: `${projectNameById.get(link.projectId) || `建案 ${link.projectId}`} / ${link.type} / #${link.id}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>; })}</TableBody></Table>
                     </div>
                     <div className="overflow-x-auto">
-                      <Table><TableHeader><TableRow><TableHead>連結 ID</TableHead><TableHead>日期</TableHead><TableHead>時段</TableHead><TableHead>名額</TableHead></TableRow></TableHeader><TableBody>{filteredSlots.map(slot => <TableRow key={slot.id}><TableCell>{slot.linkId ?? "-"}</TableCell><TableCell>{formatDateTime(slot.slotDate)}</TableCell><TableCell>{slot.startLabel} - {slot.endLabel}</TableCell><TableCell>{slot.capacity}</TableCell></TableRow>)}</TableBody></Table>
+                      <Table><TableHeader><TableRow><TableHead>連結 ID</TableHead><TableHead>日期</TableHead><TableHead>時段</TableHead><TableHead>名額</TableHead><TableHead>狀態</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{filteredSlots.map(slot => <TableRow key={slot.id}><TableCell>{slot.linkId ?? "-"}</TableCell><TableCell>{formatDateOnly(slot.slotDate)}</TableCell><TableCell>{slot.startLabel} - {slot.endLabel}</TableCell><TableCell>{slot.capacity}</TableCell><TableCell>{slot.isActive ? "啟用" : "停用"}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingSlot(slot)}>編輯</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "slot", id: slot.id, label: `${formatDateOnly(slot.slotDate)} ${slot.startLabel}-${slot.endLabel}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>)}</TableBody></Table>
                     </div>
                   </CardContent>
                 </Card>
@@ -717,30 +819,25 @@ export default function AdminPage() {
               <TabsContent value="bookings" className="space-y-6">
                 <Card>
                   <CardHeader><CardTitle>預約紀錄查詢</CardTitle></CardHeader>
-                  <CardContent className="grid gap-4 md:grid-cols-4">
+                  <CardContent className="grid gap-4 md:grid-cols-5">
                     <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={bookingFilters.projectId} onChange={event => setBookingFilters(current => ({ ...current, projectId: event.target.value }))}><option value="">全部</option>{projectOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
                     <div className="space-y-2"><Label>戶號</Label><Input value={bookingFilters.unitNumber} onChange={event => setBookingFilters(current => ({ ...current, unitNumber: event.target.value }))} placeholder="可模糊查詢" /></div>
                     <div className="space-y-2"><Label>類型</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={bookingFilters.bookingType} onChange={event => setBookingFilters(current => ({ ...current, bookingType: event.target.value }))}><option value="all">全部</option><option value="initial">初驗</option><option value="reinspect">複驗</option></select></div>
                     <div className="space-y-2"><Label>狀態</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={bookingFilters.status} onChange={event => setBookingFilters(current => ({ ...current, status: event.target.value }))}><option value="all">全部</option><option value="booked">booked</option><option value="rescheduled">rescheduled</option><option value="cancelled">cancelled</option></select></div>
+                    <div className="space-y-2"><Label>預約日期</Label><Input type="date" value={bookingFilters.bookingDate} onChange={event => setBookingFilters(current => ({ ...current, bookingDate: event.target.value }))} /></div>
                   </CardContent>
                 </Card>
 
                 <Card>
-                  <CardHeader><CardTitle>改期操作</CardTitle><CardDescription>改期後會自動保留原時段與新時段歷程。這樣做的風險是，如果你沒有同步通知住戶，現場還是會撞期。</CardDescription></CardHeader>
-                  <CardContent className="grid gap-4 md:grid-cols-3">
-                    <div className="space-y-2"><Label>預約 ID</Label><Input value={rescheduleForm.bookingId} onChange={event => setRescheduleForm(current => ({ ...current, bookingId: event.target.value }))} /></div>
-                    <div className="space-y-2"><Label>新時段 ID</Label><Input value={rescheduleForm.newSlotId} onChange={event => setRescheduleForm(current => ({ ...current, newSlotId: event.target.value }))} /></div>
-                    <div className="space-y-2"><Label>備註</Label><Input value={rescheduleForm.note} onChange={event => setRescheduleForm(current => ({ ...current, note: event.target.value }))} /></div>
-                    <div className="md:col-span-3"><Button onClick={() => rescheduleMutation.mutate({ bookingId: Number(rescheduleForm.bookingId), newSlotId: Number(rescheduleForm.newSlotId), note: rescheduleForm.note || undefined })} disabled={rescheduleMutation.isPending}>{rescheduleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}執行改期</Button></div>
-                  </CardContent>
+                  <CardHeader><CardTitle>改期操作</CardTitle><CardDescription>你現在不用再手動輸入預約 ID 與時段 ID。請直接在下方預約紀錄點選「編輯改期」，再選新的日期與時段。</CardDescription></CardHeader>
                 </Card>
 
                 <Card>
                   <CardHeader><CardTitle>預約紀錄</CardTitle></CardHeader>
                   <CardContent className="overflow-x-auto">
                     <Table>
-                      <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>公司 / 建案</TableHead><TableHead>戶號</TableHead><TableHead>類型</TableHead><TableHead>時段</TableHead><TableHead>狀態</TableHead></TableRow></TableHeader>
-                      <TableBody>{bookings.map(booking => <TableRow key={booking.id}><TableCell>{booking.id}</TableCell><TableCell>{booking.companyName} / {booking.projectName}</TableCell><TableCell>{booking.unitNumberSnapshot}</TableCell><TableCell>{booking.bookingType}</TableCell><TableCell>{formatDateTime(booking.slotDate)} {booking.startLabel}-{booking.endLabel}</TableCell><TableCell>{booking.status}</TableCell></TableRow>)}</TableBody>
+                      <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>公司 / 建案</TableHead><TableHead>戶號</TableHead><TableHead>類型</TableHead><TableHead>時段</TableHead><TableHead>狀態</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
+                      <TableBody>{bookings.map(booking => <React.Fragment key={booking.id}><TableRow><TableCell>{booking.id}</TableCell><TableCell>{booking.companyName} / {booking.projectName}</TableCell><TableCell>{booking.unitNumberSnapshot}</TableCell><TableCell>{booking.bookingType}</TableCell><TableCell>{formatDateOnly(booking.slotDate)} {booking.startLabel}-{booking.endLabel}</TableCell><TableCell>{booking.status}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => startEditingBooking(booking)}>{rescheduleForm.bookingId === String(booking.id) ? "編輯中" : "編輯改期"}</Button></TableCell></TableRow>{rescheduleForm.bookingId === String(booking.id) ? <TableRow><TableCell colSpan={7} className="bg-muted/20"><div className="grid gap-4 py-2 md:grid-cols-4"><div className="space-y-2"><Label>新日期</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={rescheduleForm.slotDate} onChange={event => setRescheduleForm(current => ({ ...current, slotDate: event.target.value, newSlotId: "" }))}><option value="">請選擇</option>{rescheduleDateOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div><div className="space-y-2"><Label>新時段</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={rescheduleForm.newSlotId} onChange={event => setRescheduleForm(current => ({ ...current, newSlotId: event.target.value }))}><option value="">請選擇</option>{rescheduleSlotOptions.map(slot => <option key={slot.id} value={slot.id}>{`${slot.startLabel}-${slot.endLabel} / 餘額 ${slot.capacity}`}</option>)}</select></div><div className="space-y-2"><Label>備註</Label><Input value={rescheduleForm.note} onChange={event => setRescheduleForm(current => ({ ...current, note: event.target.value }))} placeholder="例如：住戶要求改期" /></div><div className="flex items-end gap-2"><Button onClick={submitReschedule} disabled={rescheduleMutation.isPending}>{rescheduleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}確認改期</Button><Button variant="outline" onClick={cancelEditingBooking} disabled={rescheduleMutation.isPending}>取消</Button></div></div></TableCell></TableRow> : null}</React.Fragment>)}</TableBody>
                     </Table>
                   </CardContent>
                 </Card>

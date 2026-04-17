@@ -182,6 +182,9 @@ vi.mock("@/lib/trpc", () => ({
       deleteLink: {
         useMutation: () => ({ isPending: false, mutate: mocks.noopMutate, mutateAsync: mocks.noopMutateAsync }),
       },
+      deleteSlot: {
+        useMutation: () => ({ isPending: false, mutate: mocks.noopMutate, mutateAsync: mocks.noopMutateAsync }),
+      },
       toggleLinkEnabled: {
         useMutation: () => ({ isPending: false, mutate: mocks.noopMutate, mutateAsync: mocks.noopMutateAsync }),
       },

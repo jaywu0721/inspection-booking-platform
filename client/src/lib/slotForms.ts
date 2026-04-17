@@ -23,6 +23,7 @@ type EditablePreset = {
 };
 
 type SlotFormInput = {
+  id?: string;
   linkId: string;
   slotDate: string;
   startLabel: string;
@@ -74,9 +75,12 @@ export function validateSingleSlotForm(input: SlotFormInput) {
     return { ok: false as const, message: "請完整填寫時段起訖時間" };
   }
 
+  const parsedId = Number(input.id);
+
   return {
     ok: true as const,
     payload: {
+      id: Number.isInteger(parsedId) && parsedId > 0 ? parsedId : undefined,
       linkId: Number(input.linkId),
       slotDate: new Date(input.slotDate),
       startLabel: input.startLabel.trim(),

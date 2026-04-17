@@ -687,6 +687,19 @@ export async function deleteBookingLinkRecord(linkId: number) {
   return linkId;
 }
 
+export async function deleteBookingSlotRecord(slotId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const [bookingUsage] = await db.select({ used: count(bookings.id) }).from(bookings).where(eq(bookings.slotId, slotId));
+  if (Number(bookingUsage?.used ?? 0) > 0) {
+    throw new Error("此時段已有預約紀錄，為了保留歷程，不能直接刪除");
+  }
+
+  await db.delete(bookingSlots).where(eq(bookingSlots.id, slotId));
+  return slotId;
+}
+
 export async function setBookingLinkEnabledRecord(input: { id: number; isEnabled: boolean; disabledReason?: string | null }) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
@@ -809,6 +822,7 @@ export async function searchBookings(filters: {
   unitNumber?: string;
   bookingType?: "initial" | "reinspect";
   status?: "booked" | "rescheduled" | "cancelled";
+  bookingDate?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
@@ -818,10 +832,15 @@ export async function searchBookings(filters: {
   if (filters.unitNumber) conditions.push(like(bookings.unitNumberSnapshot, `%${filters.unitNumber}%`));
   if (filters.bookingType) conditions.push(eq(bookings.bookingType, filters.bookingType));
   if (filters.status) conditions.push(eq(bookings.status, filters.status));
+  if (filters.bookingDate) conditions.push(sql`DATE(${bookingSlots.slotDate}) = ${filters.bookingDate}`);
 
   return db
     .select({
       id: bookings.id,
+      companyId: bookings.companyId,
+      projectId: bookings.projectId,
+      linkId: bookings.linkId,
+      slotId: bookings.slotId,
       companyName: companies.name,
       projectName: projects.name,
       bookingType: bookings.bookingType,
@@ -842,7 +861,7 @@ export async function searchBookings(filters: {
     .innerJoin(projects, eq(projects.id, bookings.projectId))
     .innerJoin(bookingSlots, eq(bookingSlots.id, bookings.slotId))
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(bookings.createdAtMs));
+    .orderBy(asc(bookingSlots.slotDate), asc(bookingSlots.startLabel), asc(bookingSlots.endLabel), asc(bookings.id));
 }
 
 export async function rescheduleBookingRecord(input: {

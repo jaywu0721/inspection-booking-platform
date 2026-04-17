@@ -175,4 +175,38 @@ describe("home booking guard ui", () => {
     expect(screen.queryByRole("button", { name: "送出預約" })).toBeNull();
     expect(mocks.createBookingMutateAsync).not.toHaveBeenCalled();
   });
+
+  it("scrolls to the booking section after mobile verification succeeds", async () => {
+    const user = userEvent.setup();
+    const originalInnerWidth = window.innerWidth;
+    const originalRequestAnimationFrame = window.requestAnimationFrame;
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 768 });
+    window.requestAnimationFrame = callback => {
+      callback(0);
+      return 1;
+    };
+
+    const { default: Home } = await import("../client/src/pages/Home");
+    render(createElement(Home));
+
+    await user.type(screen.getByLabelText("標準戶號"), "A-4-A");
+    await user.type(screen.getByLabelText("手機號碼"), "0912345678");
+    await user.click(screen.getByRole("button", { name: "進行住戶驗證" }));
+
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: originalScrollIntoView,
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
+    window.requestAnimationFrame = originalRequestAnimationFrame;
+  });
 });
