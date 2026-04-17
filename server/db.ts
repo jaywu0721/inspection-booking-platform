@@ -96,6 +96,10 @@ async function seedDefaults() {
       .where(eq(adminCredentials.id, adminRow.id));
   }
 
+  if (process.env.VITEST || process.env.NODE_ENV === "test" || process.env.SKIP_DB_SEED === "1") {
+    return;
+  }
+
   const defaultCompanies: Array<InsertCompany> = [
     {
       slug: "yisin",
@@ -369,7 +373,7 @@ export async function getPublicSiteContext(input: PublicSiteLinkInput) {
   const slotRows = await db
     .select()
     .from(bookingSlots)
-    .where(and(eq(bookingSlots.projectId, row.project.id), eq(bookingSlots.isActive, true)))
+    .where(and(eq(bookingSlots.projectId, row.project.id), eq(bookingSlots.linkId, row.link.id), eq(bookingSlots.isActive, true)))
     .orderBy(asc(bookingSlots.slotDate), asc(bookingSlots.startLabel));
 
   const availableSlots = slotRows.map(slot => {
@@ -474,7 +478,7 @@ export async function createBookingRecord(input: PublicSiteLinkInput & {
   const [slot] = await db
     .select()
     .from(bookingSlots)
-    .where(and(eq(bookingSlots.id, input.slotId), eq(bookingSlots.projectId, site.project.id), eq(bookingSlots.isActive, true)))
+    .where(and(eq(bookingSlots.id, input.slotId), eq(bookingSlots.projectId, site.project.id), eq(bookingSlots.linkId, site.link.id), eq(bookingSlots.isActive, true)))
     .limit(1);
 
   if (!slot) {
@@ -542,7 +546,7 @@ export async function getAdminDashboardData() {
     db.select().from(projects).orderBy(desc(projects.createdAt)),
     db.select().from(residents).orderBy(desc(residents.createdAt)),
     db.select().from(bookingLinks).orderBy(desc(bookingLinks.createdAt)),
-    db.select().from(bookingSlots).orderBy(desc(bookingSlots.slotDate)),
+    db.select().from(bookingSlots).where(sql`${bookingSlots.linkId} is not null`).orderBy(desc(bookingSlots.slotDate)),
     db.select().from(bookings).orderBy(desc(bookings.createdAtMs)),
     db.select().from(bookingReschedules).orderBy(desc(bookingReschedules.changedAtMs)),
   ]);
@@ -713,16 +717,83 @@ export async function upsertBookingLinkRecord(input: Omit<InsertBookingLink, "cr
   return Number(inserted[0].insertId);
 }
 
-export async function upsertBookingSlotRecord(input: Omit<InsertBookingSlot, "createdAt" | "updatedAt"> & { id?: number }) {
+export async function upsertBookingSlotRecord(input: {
+  id?: number;
+  companyId?: number;
+  projectId?: number;
+  linkId?: number | null;
+  slotDate: Date;
+  startLabel: string;
+  endLabel: string;
+  capacity: number;
+  isActive: boolean;
+}) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
+  let resolvedLink = null as null | Pick<InsertBookingLink, "id" | "companyId" | "projectId">;
+
+  if (input.linkId) {
+    const [link] = await db.select().from(bookingLinks).where(eq(bookingLinks.id, input.linkId)).limit(1);
+    if (!link) {
+      throw new Error("找不到對應的預約連結");
+    }
+    resolvedLink = link;
+  } else if (input.companyId && input.projectId) {
+    const links = await db
+      .select({ id: bookingLinks.id, companyId: bookingLinks.companyId, projectId: bookingLinks.projectId })
+      .from(bookingLinks)
+      .where(and(eq(bookingLinks.companyId, input.companyId), eq(bookingLinks.projectId, input.projectId), eq(bookingLinks.isEnabled, true)))
+      .orderBy(desc(bookingLinks.createdAt))
+      .limit(2);
+
+    if (!links[0]) {
+      throw new Error("找不到對應的預約連結");
+    }
+
+    if (links[1]) {
+      throw new Error("此建案已有多筆預約連結，請明確指定要掛載時段的 linkId");
+    }
+
+    resolvedLink = links[0];
+  } else {
+    throw new Error("建立時段時必須提供 linkId，或至少提供 companyId 與 projectId 供系統解析唯一連結");
+  }
+
+  const payload = {
+    ...input,
+    linkId: resolvedLink.id,
+    companyId: resolvedLink.companyId,
+    projectId: resolvedLink.projectId,
+  };
+
+  const duplicateConditions = [
+    sql`${bookingSlots.linkId} = ${resolvedLink.id}`,
+    eq(bookingSlots.slotDate, input.slotDate),
+    eq(bookingSlots.startLabel, input.startLabel),
+    eq(bookingSlots.endLabel, input.endLabel),
+  ];
+
   if (input.id) {
-    await db.update(bookingSlots).set(input).where(eq(bookingSlots.id, input.id));
+    duplicateConditions.push(sql`${bookingSlots.id} <> ${input.id}` as never);
+  }
+
+  const [duplicate] = await db
+    .select({ id: bookingSlots.id })
+    .from(bookingSlots)
+    .where(and(...duplicateConditions))
+    .limit(1);
+
+  if (duplicate) {
+    throw new Error("同一預約連結在這個日期與時段已存在紀錄，請勿重複建立");
+  }
+
+  if (input.id) {
+    await db.update(bookingSlots).set(payload).where(eq(bookingSlots.id, input.id));
     return input.id;
   }
 
-  const inserted = await db.insert(bookingSlots).values(input);
+  const inserted = await db.insert(bookingSlots).values(payload);
   return Number(inserted[0].insertId);
 }
 

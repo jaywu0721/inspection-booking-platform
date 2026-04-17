@@ -253,8 +253,7 @@ export const appRouter = router({
       .input(
         z.object({
           id: z.number().int().positive().optional(),
-          companyId: z.number().int().positive(),
-          projectId: z.number().int().positive(),
+          linkId: z.number().int().positive(),
           slotDate: z.coerce.date(),
           startLabel: z.string().min(1),
           endLabel: z.string().min(1),

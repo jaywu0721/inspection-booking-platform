@@ -115,6 +115,7 @@ export const bookingSlots = mysqlTable("bookingSlots", {
   id: int("id").autoincrement().primaryKey(),
   companyId: int("companyId").notNull(),
   projectId: int("projectId").notNull(),
+  linkId: int("linkId"),
   slotDate: timestamp("slotDate").notNull(),
   startLabel: varchar("startLabel", { length: 20 }).notNull(),
   endLabel: varchar("endLabel", { length: 20 }).notNull(),

@@ -95,8 +95,7 @@ describe("booking flow integration", () => {
     });
 
     const slot1Id = await upsertBookingSlotRecord({
-      companyId,
-      projectId,
+      linkId: initialLinkId,
       slotDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
       startLabel: "09:00",
       endLabel: "11:00",
@@ -105,8 +104,7 @@ describe("booking flow integration", () => {
     });
 
     const slot2Id = await upsertBookingSlotRecord({
-      companyId,
-      projectId,
+      linkId: initialLinkId,
       slotDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
       startLabel: "13:00",
       endLabel: "15:00",
