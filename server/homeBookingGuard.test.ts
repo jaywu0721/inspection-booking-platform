@@ -169,6 +169,9 @@ describe("home booking guard ui", () => {
 
     render(createElement(Home));
 
+    expect(screen.queryByRole("link", { name: "進入後台管理" })).toBeNull();
+    expect(screen.queryByText(/\/admin/)).toBeNull();
+
     await user.type(screen.getByLabelText("標準戶號"), "A-4-A");
     await user.type(screen.getByLabelText("手機號碼"), "0912345678");
     await user.click(screen.getByRole("button", { name: "進行住戶驗證" }));
@@ -187,6 +190,9 @@ describe("home booking guard ui", () => {
     render(createElement(Home));
 
     expect(screen.getByText("目前尚未建立可公開預約的建案頁面")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "進入後台管理" })).toBeNull();
+    expect(screen.getByText(/索取正式預約連結/)).toBeTruthy();
+    expect(screen.queryByText(/\/admin/)).toBeNull();
     expect(mocks.getContextUseQuery).toHaveBeenCalledWith(
       { companySlug: "", projectSlug: "", type: "initial" },
       expect.objectContaining({ enabled: false })

@@ -194,12 +194,7 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-muted-foreground">
-            <p>請先到後台建立正式建案與預約連結，再使用系統產生的完整分享網址開啟前台預約頁。</p>
-            <div className="flex flex-wrap gap-3">
-              <Button asChild>
-                <a href="/admin">進入後台管理</a>
-              </Button>
-            </div>
+            <p>目前尚未開放住戶預約。請向建設公司或通知窗口索取正式預約連結後，再重新開啟前台頁面。</p>
           </CardContent>
         </Card>
       </div>
@@ -252,9 +247,6 @@ export default function Home() {
               <div className="flex flex-wrap items-center gap-3">
                 <Badge className="bg-white/12 text-white border-white/20 hover:bg-white/12">{site.link.type === "initial" ? "初驗預約" : "複驗預約"}</Badge>
                 <Badge className="bg-white/12 text-white border-white/20 hover:bg-white/12">品牌動態載入</Badge>
-                <Button asChild variant="secondary" className="rounded-full bg-white text-slate-900 hover:bg-white/90">
-                  <a href="/admin">進入後台管理</a>
-                </Button>
               </div>
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
@@ -268,7 +260,6 @@ export default function Home() {
                 </div>
                 <div className="space-y-3">
                   <p className="max-w-2xl text-base leading-7 text-white/82 md:text-lg">{company.heroDescription}</p>
-                  <p className="text-sm leading-6 text-white/70">如果你是管理員，請直接點上方的「進入後台管理」，或手動前往 <code className="rounded bg-white/10 px-2 py-1 text-white">/admin</code>。</p>
                 </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
