@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,6 +79,7 @@ export default function Home() {
   });
 
   const site = siteQuery.data;
+  const sameLinkExistingBooking = verificationResult?.existingBookings?.find((booking: any) => booking.linkId === site?.link.id) ?? null;
 
   const submitVerification = async () => {
     await verifyMutation.mutateAsync({
@@ -333,48 +334,61 @@ export default function Home() {
                       )}
                     </div>
 
-                    <div className="space-y-4">
-                      <h3 className="font-semibold">選擇新的預約時段</h3>
-                      <div className="space-y-3">
-                        {availableSlots.length === 0 ? (
-                          <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">目前尚未開放可用時段，請聯絡窗口安排。</div>
+                      <div className="space-y-4">
+                        <h3 className="font-semibold">選擇新的預約時段</h3>
+                        {sameLinkExistingBooking ? (
+                          <Alert className="border-amber-300/60 bg-amber-50 text-amber-950">
+                            <CircleAlert className="h-4 w-4" />
+                            <AlertTitle>你已完成預約，不得重複預約</AlertTitle>
+                            <AlertDescription>
+                              你已預約時間：{formatDate(sameLinkExistingBooking.slotDate)} {sameLinkExistingBooking.startLabel} - {sameLinkExistingBooking.endLabel}。若需改期，請直接聯繫頁面上的聯絡窗口，由管理員協助調整。
+                            </AlertDescription>
+                          </Alert>
                         ) : (
-                          availableSlots.map((slot: any) => {
-                            const isFull = slot.remaining <= 0;
-                            const isSelected = slotId === slot.id;
-                            return (
-                              <button
-                                key={slot.id}
-                                type="button"
-                                onClick={() => !isFull && setSlotId(slot.id)}
-                                className={`w-full rounded-2xl border p-4 text-left transition ${isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border/80 hover:border-primary/40"} ${isFull ? "cursor-not-allowed opacity-55" : ""}`}
-                                disabled={isFull}
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <p className="font-medium">{formatDate(slot.slotDate)}</p>
-                                    <p className="text-sm text-muted-foreground">{slot.startLabel} - {slot.endLabel}</p>
-                                  </div>
-                                  <Badge variant={isFull ? "destructive" : "secondary"}>{isFull ? "已額滿" : `剩餘 ${slot.remaining} 名`}</Badge>
-                                </div>
-                              </button>
-                            );
-                          })
+                          <>
+                            <div className="space-y-3">
+                              {availableSlots.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">目前尚未開放可用時段，請聯絡窗口安排。</div>
+                              ) : (
+                                availableSlots.map((slot: any) => {
+                                  const isFull = slot.remaining <= 0;
+                                  const isSelected = slotId === slot.id;
+                                  return (
+                                    <button
+                                      key={slot.id}
+                                      type="button"
+                                      onClick={() => !isFull && setSlotId(slot.id)}
+                                      className={`w-full rounded-2xl border p-4 text-left transition ${isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border/80 hover:border-primary/40"} ${isFull ? "cursor-not-allowed opacity-55" : ""}`}
+                                      disabled={isFull}
+                                    >
+                                      <div className="flex items-center justify-between gap-3">
+                                        <div>
+                                          <p className="font-medium">{formatDate(slot.slotDate)}</p>
+                                          <p className="text-sm text-muted-foreground">{slot.startLabel} - {slot.endLabel}</p>
+                                        </div>
+                                        <Badge variant={isFull ? "destructive" : "secondary"}>{isFull ? "已額滿" : `剩餘 ${slot.remaining} 名`}</Badge>
+                                      </div>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="gmail">Gmail</Label>
+                              <Input id="gmail" type="email" value={gmail} onChange={event => setGmail(event.target.value)} placeholder="yourname@gmail.com" />
+                            </div>
+                            <label className="flex items-center gap-3 rounded-2xl border border-border/70 p-4">
+                              <Checkbox checked={hasInspectionCompany} onCheckedChange={checked => setHasInspectionCompany(Boolean(checked))} />
+                              <span className="text-sm text-muted-foreground">此次驗屋是否會由驗屋公司陪同</span>
+                            </label>
+                            <Button className="w-full" onClick={submitBooking} disabled={createBookingMutation.isPending || site.isExpired}>
+                              {createBookingMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                              送出預約
+                            </Button>
+                          </>
                         )}
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="gmail">Gmail</Label>
-                        <Input id="gmail" type="email" value={gmail} onChange={event => setGmail(event.target.value)} placeholder="yourname@gmail.com" />
-                      </div>
-                      <label className="flex items-center gap-3 rounded-2xl border border-border/70 p-4">
-                        <Checkbox checked={hasInspectionCompany} onCheckedChange={checked => setHasInspectionCompany(Boolean(checked))} />
-                        <span className="text-sm text-muted-foreground">此次驗屋是否會由驗屋公司陪同</span>
-                      </label>
-                      <Button className="w-full" onClick={submitBooking} disabled={createBookingMutation.isPending || site.isExpired}>
-                        {createBookingMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                        送出預約
-                      </Button>
-                    </div>
+
                   </>
                 )}
               </CardContent>

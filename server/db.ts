@@ -424,6 +424,7 @@ export async function verifyResidentForBooking(input: PublicSiteLinkInput & {
   const existingBookings = await db
     .select({
       id: bookings.id,
+      linkId: bookings.linkId,
       bookingType: bookings.bookingType,
       status: bookings.status,
       gmail: bookings.gmail,
@@ -487,20 +488,26 @@ export async function createBookingRecord(input: PublicSiteLinkInput & {
 
   const result = await db.transaction(async tx => {
     const [existing] = await tx
-      .select()
+      .select({
+        id: bookings.id,
+        slotDate: bookingSlots.slotDate,
+        startLabel: bookingSlots.startLabel,
+        endLabel: bookingSlots.endLabel,
+      })
       .from(bookings)
+      .innerJoin(bookingSlots, eq(bookingSlots.id, bookings.slotId))
       .where(
         and(
-          eq(bookings.projectId, site.project.id),
+          eq(bookings.linkId, site.link.id),
           eq(bookings.unitNumberSnapshot, resident.unitNumber),
-          eq(bookings.bookingType, site.link.type),
           sql`${bookings.status} <> 'cancelled'`
         )
       )
       .limit(1);
 
     if (existing) {
-      throw new Error("此戶號已存在同類型預約，請先於查詢區確認既有紀錄。 ");
+      const reservedDate = new Date(existing.slotDate).toISOString().slice(0, 10);
+      throw new Error(`你已預約 ${reservedDate} ${existing.startLabel}-${existing.endLabel}，不得重複預約`);
     }
 
     const [slotUsage] = await tx

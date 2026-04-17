@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { bookingReschedules, bookings, companies, projects } from "../drizzle/schema";
+import { bookingLinks, bookingReschedules, bookings, companies, projects } from "../drizzle/schema";
 import {
   createBookingRecord,
   getDb,
@@ -31,6 +31,8 @@ describe("booking flow integration", () => {
     const unitNumber = `A-${suffix}`;
     const phoneNumber = `09${String(suffix).slice(-8)}`;
     const phoneNumber2 = `09${String(Number(String(suffix).slice(-8)) + 1).padStart(8, "0")}`;
+    const unitNumber3 = `B-${suffix}`;
+    const phoneNumber3 = `09${String(Number(String(suffix).slice(-8)) + 2).padStart(8, "0")}`;
 
     const companyId = await upsertCompanyRecord({
       slug: companySlug,
@@ -72,6 +74,14 @@ describe("booking flow integration", () => {
       note: "同戶第二位聯絡人",
     });
 
+    const residentId3 = await upsertResidentRecord({
+      companyId,
+      projectId,
+      unitNumber: unitNumber3,
+      phoneNumber: phoneNumber3,
+      note: "額滿保護測試住戶",
+    });
+
     const startsAt = new Date(Date.now() - 60 * 60 * 1000);
     const endsAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const initialLinkId = await upsertBookingLinkRecord({
@@ -84,7 +94,7 @@ describe("booking flow integration", () => {
       disabledReason: null,
     });
 
-    await upsertBookingLinkRecord({
+    const reinspectLinkId = await upsertBookingLinkRecord({
       companyId,
       projectId,
       type: "reinspect",
@@ -165,7 +175,8 @@ describe("booking flow integration", () => {
         gmail: `duplicate${suffix}@gmail.com`,
         hasInspectionCompany: false,
       })
-    ).rejects.toThrow("此戶號已存在同類型預約");
+    ).rejects.toThrow(/你已預約 .* 09:00-11:00，不得重複預約/);
+
 
     await rescheduleBookingRecord({
       bookingId,
@@ -185,12 +196,54 @@ describe("booking flow integration", () => {
     await expect(
       createBookingRecord({
         linkToken: verified.site.link.shareToken,
-        residentId: residentId2,
-        slotId: slot1Id,
+        residentId: residentId3,
+        slotId: slot2Id,
         gmail: `full${suffix}@gmail.com`,
         hasInspectionCompany: false,
       })
-    ).rejects.toThrow("此戶號已存在同類型預約");
+    ).rejects.toThrow("該時段已額滿，請改選其他時段");
+
+    const initialLinkId2 = await upsertBookingLinkRecord({
+      companyId,
+      projectId,
+      type: "initial",
+      isEnabled: true,
+      startsAt,
+      endsAt,
+      disabledReason: null,
+    });
+
+    const slot3Id = await upsertBookingSlotRecord({
+      linkId: initialLinkId2,
+      slotDate: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000),
+      startLabel: "15:30",
+      endLabel: "17:00",
+      capacity: 1,
+      isActive: true,
+    });
+
+    const [initialLink2Row] = await db.select().from(bookingLinks).where(eq(bookingLinks.id, initialLinkId2)).limit(1);
+    expect(initialLink2Row?.shareToken).toBeTruthy();
+
+    const secondInitialBookingId = await createBookingRecord({
+      linkToken: initialLink2Row!.shareToken,
+      residentId: residentId2,
+      slotId: slot3Id,
+      gmail: `second-link${suffix}@gmail.com`,
+      hasInspectionCompany: false,
+    });
+
+    expect(secondInitialBookingId).toBeGreaterThan(0);
+
+    await expect(
+      createBookingRecord({
+        linkToken: initialLink2Row!.shareToken,
+        residentId: residentId2,
+        slotId: slot3Id,
+        gmail: `second-link-duplicate${suffix}@gmail.com`,
+        hasInspectionCompany: false,
+      })
+    ).rejects.toThrow(/你已預約 .* 15:30-17:00，不得重複預約/);
 
     await setBookingLinkEnabledRecord({
       id: initialLinkId,
@@ -200,9 +253,7 @@ describe("booking flow integration", () => {
 
     await expect(
       verifyResidentForBooking({
-        companySlug,
-        projectSlug,
-        type: "initial",
+        linkToken: verified.site.link.shareToken,
         unitNumber,
         phoneNumber,
       })
