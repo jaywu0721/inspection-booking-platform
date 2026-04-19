@@ -78,22 +78,13 @@ async function seedDefaults() {
   if (!db) return;
 
   const [adminRow] = await db.select().from(adminCredentials).limit(1);
-  const passwordHash = await hashPassword(getDefaultAdminPassword());
   if (!adminRow) {
+    const passwordHash = await hashPassword(getDefaultAdminPassword());
     await db.insert(adminCredentials).values({
       username: getDefaultAdminUsername(),
       passwordHash,
       isActive: true,
     });
-  } else {
-    await db
-      .update(adminCredentials)
-      .set({
-        username: getDefaultAdminUsername(),
-        passwordHash,
-        isActive: true,
-      })
-      .where(eq(adminCredentials.id, adminRow.id));
   }
 
   if (process.env.VITEST || process.env.NODE_ENV === "test" || process.env.SKIP_DB_SEED === "1") {
@@ -131,25 +122,25 @@ async function seedDefaults() {
     },
   ];
 
-  for (const company of defaultCompanies) {
-    await db.insert(companies).values(company).onDuplicateKeyUpdate({
-      set: {
-        name: company.name,
-        logoUrl: company.logoUrl,
-        contactPhone: company.contactPhone,
-        contactEmail: company.contactEmail,
-        heroTitle: company.heroTitle,
-        heroDescription: company.heroDescription,
-        inspectionFlow: company.inspectionFlow,
-        handoverFlow: company.handoverFlow,
-        precautions: company.precautions,
-        faqItems: company.faqItems,
-        contactWindow: company.contactWindow,
-      },
-    });
+  const existingCompanyRows = await db
+    .select({ slug: companies.slug })
+    .from(companies)
+    .where(inArray(companies.slug, defaultCompanies.map(company => company.slug)));
+  const existingCompanySlugs = new Set(existingCompanyRows.map(company => company.slug));
+  const missingCompanies = defaultCompanies.filter(company => !existingCompanySlugs.has(company.slug));
+
+  if (missingCompanies.length > 0) {
+    await db.insert(companies).values(missingCompanies);
   }
 
-  const companyRows = await db.select().from(companies);
+  if (process.env.ENABLE_DEMO_SEED !== "1") {
+    return;
+  }
+
+  const companyRows = await db
+    .select()
+    .from(companies)
+    .where(inArray(companies.slug, defaultCompanies.map(company => company.slug)));
   for (const company of companyRows) {
     const demoProjectSlug = `${company.slug}-demo`;
     const [existingProject] = await db

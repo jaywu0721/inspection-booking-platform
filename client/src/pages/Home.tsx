@@ -223,12 +223,8 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-muted-foreground">
-            <p>建議直接使用後台產生的完整分享網址，例如：<code>?link=你的專屬連結 token</code>。舊格式 <code>?company=yisin&project=yisin-demo&type=initial</code> 只適合單一示範連結。</p>
-            <p>系統目前也提供兩組示範連結可用來驗證品牌切換。</p>
-            <div className="flex flex-wrap gap-3">
-              <Button asChild variant="outline"><a href="/?company=yisin&project=yisin-demo&type=initial">鷁欣建設示範連結</a></Button>
-              <Button asChild variant="outline"><a href="/?company=yiqi&project=yiqi-demo&type=initial">鷁崎建設示範連結</a></Button>
-            </div>
+            <p>請直接使用後台產生的完整分享網址，例如：<code>?link=你的專屬連結 token</code>。如果分享網址缺少完整 token，或使用了過期、停用、錯誤的參數組合，住戶端就會打不開。</p>
+            <p>這個頁面不再提供任何示範連結，避免正式站點重新導向到系統測試內容。</p>
           </CardContent>
         </Card>
       </div>

@@ -1,0 +1,292 @@
+{
+  "adminSettings": [
+    {
+      "id": 1,
+      "username": "yisin1234",
+      "isActive": 1,
+      "updatedAt": "2026-04-19T04:29:01.000Z"
+    }
+  ],
+  "companies": [
+    {
+      "id": 1,
+      "name": "鷁欣建設",
+      "slug": "yisin",
+      "contactPhone": "04-0000-0001",
+      "contactEmail": "service@yisin-demo.tw",
+      "heroTitle": "鷁欣建設驗屋預約系統",
+      "heroDescription": "提供住戶初驗與複驗的品牌化預約入口，統一查詢時段、流程說明與窗口資訊。",
+      "inspectionFlow": "1. 線上驗證身分\n2. 選擇驗屋時段\n3. 到場進行初驗\n4. 修繕完成後安排複驗",
+      "handoverFlow": "複驗完成並確認缺失處理後，由公司安排正式交屋時程與文件確認。",
+      "precautions": "請依約定時間到場，並預留足夠時間完成驗屋；若需改期，請先聯繫窗口。",
+      "faqItems": [
+        {
+          "answer": "請先依戶號格式輸入標準戶號與完整手機號碼，驗證成功後即可查看既有預約與可用時段。",
+          "question": "如何進行 鷁欣建設 驗屋預約？"
+        },
+        {
+          "answer": "前台不提供自行改期，請直接聯繫頁面上的聯絡窗口，由管理員協助調整。",
+          "question": "如果要改期怎麼處理？"
+        },
+        {
+          "answer": "目前系統會保留 Gmail 作為預約紀錄欄位之一，請填寫可正常收信的 Gmail。",
+          "question": "一定要填 Gmail 嗎？"
+        }
+      ],
+      "contactWindow": "客服窗口：鷁欣建設客服中心\n服務時間：週一至週五 09:00-18:00",
+      "projectCount": 1,
+      "residentCount": 1,
+      "bookingLinkCount": 1,
+      "slotCount": 4,
+      "bookingCount": 1
+    },
+    {
+      "id": 2,
+      "name": "鷁崎建設",
+      "slug": "yiqi",
+      "contactPhone": "04-0000-0002",
+      "contactEmail": "service@yiqi-demo.tw",
+      "heroTitle": "鷁崎建設驗屋預約系統",
+      "heroDescription": "整合建案流程說明、驗屋注意事項與預約管理，讓住戶透過單一入口完成作業。",
+      "inspectionFlow": "1. 開啟專屬連結\n2. 驗證戶號與手機\n3. 查詢既有預約\n4. 視需要新增預約或等待複驗安排",
+      "handoverFlow": "複驗完成後，將由專員通知交屋作業與相關文件準備內容。",
+      "precautions": "請確認戶號格式與手機號碼正確；若連結已截止，請聯繫建案窗口協助。",
+      "faqItems": [
+        {
+          "answer": "請先依戶號格式輸入標準戶號與完整手機號碼，驗證成功後即可查看既有預約與可用時段。",
+          "question": "如何進行 鷁崎建設 驗屋預約？"
+        },
+        {
+          "answer": "前台不提供自行改期，請直接聯繫頁面上的聯絡窗口，由管理員協助調整。",
+          "question": "如果要改期怎麼處理？"
+        },
+        {
+          "answer": "目前系統會保留 Gmail 作為預約紀錄欄位之一，請填寫可正常收信的 Gmail。",
+          "question": "一定要填 Gmail 嗎？"
+        }
+      ],
+      "contactWindow": "客服窗口：鷁崎建設客戶服務部\n服務時間：週一至週五 09:00-18:00",
+      "projectCount": 1,
+      "residentCount": 1,
+      "bookingLinkCount": 1,
+      "slotCount": 8,
+      "bookingCount": 1
+    }
+  ],
+  "projects": [
+    {
+      "id": 330038,
+      "companyId": 1,
+      "companyName": "鷁欣建設",
+      "slug": "鷁欣緻境-1",
+      "name": "鷁欣緻境",
+      "unitFormatHint": "樓層戶別",
+      "houseNumberExample": "8A",
+      "residentCount": 1,
+      "bookingLinkCount": 1,
+      "slotCount": 4,
+      "bookingCount": 1
+    },
+    {
+      "id": 330037,
+      "companyId": 2,
+      "companyName": "鷁崎建設",
+      "slug": "鷁崎緻鄰-2",
+      "name": "鷁崎緻鄰",
+      "unitFormatHint": "樓層戶別",
+      "houseNumberExample": "3A",
+      "residentCount": 1,
+      "bookingLinkCount": 1,
+      "slotCount": 8,
+      "bookingCount": 1
+    }
+  ],
+  "bookingLinks": [
+    {
+      "id": 330066,
+      "companyName": "鷁崎建設",
+      "projectName": "鷁崎緻鄰",
+      "type": "initial",
+      "isEnabled": 1,
+      "startsAt": "2026-04-17 23:01:00",
+      "endsAt": "2026-04-18 23:01:00"
+    },
+    {
+      "id": 330067,
+      "companyName": "鷁欣建設",
+      "projectName": "鷁欣緻境",
+      "type": "reinspect",
+      "isEnabled": 1,
+      "startsAt": "2026-04-17 23:05:00",
+      "endsAt": "2026-04-24 23:05:00"
+    }
+  ],
+  "slots": [
+    {
+      "id": 210013,
+      "companyName": "鷁崎建設",
+      "projectName": "鷁崎緻鄰",
+      "linkId": 330066,
+      "slotDate": "2026-04-21",
+      "startLabel": "08:00",
+      "endLabel": "10:30",
+      "capacity": 3,
+      "isActive": 1
+    },
+    {
+      "id": 210014,
+      "companyName": "鷁崎建設",
+      "projectName": "鷁崎緻鄰",
+      "linkId": 330066,
+      "slotDate": "2026-04-21",
+      "startLabel": "10:30",
+      "endLabel": "12:00",
+      "capacity": 3,
+      "isActive": 1
+    },
+    {
+      "id": 210015,
+      "companyName": "鷁崎建設",
+      "projectName": "鷁崎緻鄰",
+      "linkId": 330066,
+      "slotDate": "2026-04-21",
+      "startLabel": "14:00",
+      "endLabel": "15:30",
+      "capacity": 3,
+      "isActive": 1
+    },
+    {
+      "id": 210016,
+      "companyName": "鷁崎建設",
+      "projectName": "鷁崎緻鄰",
+      "linkId": 330066,
+      "slotDate": "2026-04-21",
+      "startLabel": "15:30",
+      "endLabel": "17:00",
+      "capacity": 3,
+      "isActive": 1
+    },
+    {
+      "id": 210021,
+      "companyName": "鷁崎建設",
+      "projectName": "鷁崎緻鄰",
+      "linkId": 330066,
+      "slotDate": "2026-04-29",
+      "startLabel": "09:00",
+      "endLabel": "10:30",
+      "capacity": 2,
+      "isActive": 1
+    },
+    {
+      "id": 210022,
+      "companyName": "鷁崎建設",
+      "projectName": "鷁崎緻鄰",
+      "linkId": 330066,
+      "slotDate": "2026-04-29",
+      "startLabel": "10:30",
+      "endLabel": "12:00",
+      "capacity": 2,
+      "isActive": 1
+    },
+    {
+      "id": 210023,
+      "companyName": "鷁崎建設",
+      "projectName": "鷁崎緻鄰",
+      "linkId": 330066,
+      "slotDate": "2026-04-29",
+      "startLabel": "14:00",
+      "endLabel": "15:30",
+      "capacity": 2,
+      "isActive": 1
+    },
+    {
+      "id": 210024,
+      "companyName": "鷁崎建設",
+      "projectName": "鷁崎緻鄰",
+      "linkId": 330066,
+      "slotDate": "2026-04-29",
+      "startLabel": "15:30",
+      "endLabel": "17:00",
+      "capacity": 2,
+      "isActive": 1
+    },
+    {
+      "id": 210017,
+      "companyName": "鷁欣建設",
+      "projectName": "鷁欣緻境",
+      "linkId": 330067,
+      "slotDate": "2026-04-24",
+      "startLabel": "09:00",
+      "endLabel": "10:30",
+      "capacity": 6,
+      "isActive": 1
+    },
+    {
+      "id": 210018,
+      "companyName": "鷁欣建設",
+      "projectName": "鷁欣緻境",
+      "linkId": 330067,
+      "slotDate": "2026-04-24",
+      "startLabel": "10:30",
+      "endLabel": "12:00",
+      "capacity": 6,
+      "isActive": 1
+    },
+    {
+      "id": 210019,
+      "companyName": "鷁欣建設",
+      "projectName": "鷁欣緻境",
+      "linkId": 330067,
+      "slotDate": "2026-04-24",
+      "startLabel": "14:00",
+      "endLabel": "15:30",
+      "capacity": 6,
+      "isActive": 1
+    },
+    {
+      "id": 210020,
+      "companyName": "鷁欣建設",
+      "projectName": "鷁欣緻境",
+      "linkId": 330067,
+      "slotDate": "2026-04-24",
+      "startLabel": "15:30",
+      "endLabel": "17:00",
+      "capacity": 6,
+      "isActive": 1
+    }
+  ],
+  "residents": [
+    {
+      "id": 210009,
+      "companyName": "鷁崎建設",
+      "projectName": "鷁崎緻鄰",
+      "unitNumber": "2A",
+      "phoneNumber": "0928136023"
+    },
+    {
+      "id": 210010,
+      "companyName": "鷁欣建設",
+      "projectName": "鷁欣緻境",
+      "unitNumber": "8A",
+      "phoneNumber": "0928136023"
+    }
+  ],
+  "bookings": [
+    {
+      "id": 240007,
+      "companyName": "鷁崎建設",
+      "projectName": "鷁崎緻鄰",
+      "unitNumberSnapshot": "2A",
+      "bookingType": "initial",
+      "status": "rescheduled"
+    },
+    {
+      "id": 270001,
+      "companyName": "鷁欣建設",
+      "projectName": "鷁欣緻境",
+      "unitNumberSnapshot": "8A",
+      "bookingType": "reinspect",
+      "status": "booked"
+    }
+  ]
+}

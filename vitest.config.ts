@@ -16,5 +16,10 @@ export default defineConfig({
     environment: "node",
     include: ["server/**/*.test.ts", "server/**/*.spec.ts"],
     fileParallelism: false,
+    setupFiles: ["./server/testDatabase.guard.ts"],
+    env: {
+      NODE_ENV: "test",
+      SKIP_DB_SEED: "1",
+    },
   },
 });
