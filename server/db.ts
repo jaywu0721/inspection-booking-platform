@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, count, desc, eq, inArray, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { buildRescheduleAvailability, calculateRemainingCapacity, hasRescheduleCapacity } from "../shared/rescheduleAvailability";
 import {
   adminCredentials,
   bookingLinks,
@@ -371,7 +372,7 @@ export async function getPublicSiteContext(input: PublicSiteLinkInput) {
     const used = slotUsage.get(slot.id) ?? 0;
     return {
       ...slot,
-      remaining: Math.max(slot.capacity - used, 0),
+      remaining: calculateRemainingCapacity(slot.capacity, used),
     };
   });
 
@@ -855,6 +856,49 @@ export async function searchBookings(filters: {
     .orderBy(asc(bookingSlots.slotDate), asc(bookingSlots.startLabel), asc(bookingSlots.endLabel), asc(bookings.id));
 }
 
+export async function getAdminRescheduleAvailability(bookingId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const [booking] = await db
+    .select({
+      id: bookings.id,
+      linkId: bookings.linkId,
+      slotId: bookings.slotId,
+    })
+    .from(bookings)
+    .where(eq(bookings.id, bookingId))
+    .limit(1);
+
+  if (!booking) {
+    throw new Error("找不到預約紀錄");
+  }
+
+  if (!booking.linkId) {
+    throw new Error("此預約缺少對應連結，無法查詢可改期時段");
+  }
+
+  const slotRows = await db
+    .select()
+    .from(bookingSlots)
+    .where(and(eq(bookingSlots.linkId, booking.linkId), eq(bookingSlots.isActive, true)))
+    .orderBy(asc(bookingSlots.slotDate), asc(bookingSlots.startLabel), asc(bookingSlots.endLabel));
+
+  if (slotRows.length === 0) {
+    return [] as Array<(typeof slotRows)[number] & { remaining: number; isCurrentSlot: boolean }>;
+  }
+
+  const usageRows = await db
+    .select({ slotId: bookings.slotId, used: count(bookings.id) })
+    .from(bookings)
+    .where(and(inArray(bookings.slotId, slotRows.map(slot => slot.id)), sql`${bookings.status} <> 'cancelled'`))
+    .groupBy(bookings.slotId);
+
+  const usageBySlotId = new Map(usageRows.map(item => [item.slotId, Number(item.used)]));
+
+  return buildRescheduleAvailability(slotRows, usageBySlotId, booking.slotId);
+}
+
 export async function rescheduleBookingRecord(input: {
   bookingId: number;
   newSlotId: number;
@@ -878,9 +922,9 @@ export async function rescheduleBookingRecord(input: {
     const [usage] = await tx
       .select({ used: count(bookings.id) })
       .from(bookings)
-      .where(and(eq(bookings.slotId, newSlot.id), sql`${bookings.status} <> 'cancelled'`, sql`${bookings.id} <> ${booking.id}`));
+      .where(and(eq(bookings.slotId, newSlot.id), sql`${bookings.status} <> 'cancelled'`));
 
-    if (Number(usage?.used ?? 0) >= newSlot.capacity) {
+    if (!hasRescheduleCapacity(newSlot.capacity, Number(usage?.used ?? 0))) {
       throw new Error("新時段已額滿");
     }
 

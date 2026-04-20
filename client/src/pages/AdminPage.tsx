@@ -6,7 +6,9 @@ import { getProjectsForCompany, parsePositiveId, validateResidentForm } from "@/
 import { buildPresetSlotPayloads, createEditableSlotPresets, filterSlotsByLink, getLinksForProject, validateSingleSlotForm } from "@/lib/slotForms";
 import { validateBookingLinkForm } from "@/lib/linkForm";
 import { buildCompanyFormFromRecord, createEmptyCompanyForm } from "@/lib/companyEditor";
+import { useRescheduleAvailabilitySync } from "@/hooks/useRescheduleAvailabilitySync";
 import { trpc } from "@/lib/trpc";
+import { AdminRescheduleFields } from "@/components/AdminRescheduleFields";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -127,6 +129,14 @@ export default function AdminPage() {
     }
   );
 
+  const rescheduleAvailabilityQuery = trpc.admin.rescheduleAvailability.useQuery(
+    { bookingId: Number(rescheduleForm.bookingId) },
+    {
+      enabled: Boolean(adminProfile.data && rescheduleForm.bookingId),
+      refetchOnWindowFocus: false,
+    }
+  );
+
   const companies = dashboardQuery.data?.companies ?? [];
   const projects = dashboardQuery.data?.projects ?? [];
   const links = dashboardQuery.data?.links ?? [];
@@ -153,6 +163,7 @@ export default function AdminPage() {
     await Promise.all([
       utils.admin.dashboard.invalidate(),
       utils.admin.searchBookings.invalidate(),
+      utils.admin.rescheduleAvailability.invalidate(),
       adminProfile.refetch(),
     ]);
   };
@@ -282,30 +293,26 @@ export default function AdminPage() {
   const filteredSlots = useMemo(() => filterSlotsByLink(slots, selectedSlotLinkId || slotForm.linkId), [slots, selectedSlotLinkId, slotForm.linkId]);
   const bookingLinkUrlById = useMemo(() => buildBookingLinkUrlMap({ origin: window.location.origin, companies, projects, links }), [companies, projects, links]);
   const editingBooking = useMemo(() => bookings.find(booking => String(booking.id) === rescheduleForm.bookingId) ?? null, [bookings, rescheduleForm.bookingId]);
-  const rescheduleSlots = useMemo(() => {
-    if (!editingBooking?.linkId) return [] as typeof slots;
-    return slots
-      .filter(slot => slot.linkId === editingBooking.linkId && slot.isActive && slot.id !== editingBooking.slotId)
-      .sort((a, b) => {
-        const timeCompare = new Date(a.slotDate).getTime() - new Date(b.slotDate).getTime();
-        if (timeCompare !== 0) return timeCompare;
-        return a.startLabel.localeCompare(b.startLabel, "zh-Hant");
-      });
-  }, [editingBooking, slots]);
+  const { syncOnDropdownOpen: syncRescheduleAvailability } = useRescheduleAvailabilitySync({
+    bookingId: rescheduleForm.bookingId,
+    slotDate: rescheduleForm.slotDate,
+    refetch: rescheduleAvailabilityQuery.refetch,
+  });
+  const rescheduleAvailability = rescheduleAvailabilityQuery.data ?? [];
   const rescheduleDateOptions = useMemo(() => {
     const seen = new Set<string>();
-    return rescheduleSlots.reduce<Array<{ value: string; label: string }>>((result, slot) => {
+    return rescheduleAvailability.reduce<Array<{ value: string; label: string }>>((result, slot) => {
       const value = new Date(slot.slotDate).toISOString().slice(0, 10);
       if (seen.has(value)) return result;
       seen.add(value);
       result.push({ value, label: formatDateOnly(slot.slotDate) });
       return result;
     }, []);
-  }, [rescheduleSlots]);
+  }, [rescheduleAvailability]);
   const rescheduleSlotOptions = useMemo(() => {
-    if (!rescheduleForm.slotDate) return [] as typeof slots;
-    return rescheduleSlots.filter(slot => new Date(slot.slotDate).toISOString().slice(0, 10) === rescheduleForm.slotDate);
-  }, [rescheduleForm.slotDate, rescheduleSlots]);
+    if (!rescheduleForm.slotDate) return [] as typeof rescheduleAvailability;
+    return rescheduleAvailability.filter(slot => new Date(slot.slotDate).toISOString().slice(0, 10) === rescheduleForm.slotDate);
+  }, [rescheduleAvailability, rescheduleForm.slotDate]);
   const isDeleting = companyDeleteMutation.isPending || projectDeleteMutation.isPending || residentDeleteMutation.isPending || linkDeleteMutation.isPending || slotDeleteMutation.isPending;
 
 
@@ -373,6 +380,15 @@ export default function AdminPage() {
   const cancelEditingBooking = () => {
     setRescheduleForm({ bookingId: "", slotDate: "", newSlotId: "", note: "" });
   };
+
+  useEffect(() => {
+    if (!rescheduleForm.newSlotId) return;
+
+    const selectedSlot = rescheduleSlotOptions.find(slot => String(slot.id) === rescheduleForm.newSlotId);
+    if (selectedSlot && selectedSlot.remaining > 0) return;
+
+    setRescheduleForm(current => ({ ...current, newSlotId: "" }));
+  }, [rescheduleForm.newSlotId, rescheduleSlotOptions]);
 
   const saveResident = () => {
     const validationMessage = validateResidentForm(residentForm, projects);
@@ -837,7 +853,7 @@ export default function AdminPage() {
                   <CardContent className="overflow-x-auto">
                     <Table>
                       <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>公司 / 建案</TableHead><TableHead>戶號</TableHead><TableHead>類型</TableHead><TableHead>時段</TableHead><TableHead>狀態</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
-                      <TableBody>{bookings.map(booking => <React.Fragment key={booking.id}><TableRow><TableCell>{booking.id}</TableCell><TableCell>{booking.companyName} / {booking.projectName}</TableCell><TableCell>{booking.unitNumberSnapshot}</TableCell><TableCell>{booking.bookingType}</TableCell><TableCell>{formatDateOnly(booking.slotDate)} {booking.startLabel}-{booking.endLabel}</TableCell><TableCell>{booking.status}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => startEditingBooking(booking)}>{rescheduleForm.bookingId === String(booking.id) ? "編輯中" : "編輯改期"}</Button></TableCell></TableRow>{rescheduleForm.bookingId === String(booking.id) ? <TableRow><TableCell colSpan={7} className="bg-muted/20"><div className="grid gap-4 py-2 md:grid-cols-4"><div className="space-y-2"><Label>新日期</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={rescheduleForm.slotDate} onChange={event => setRescheduleForm(current => ({ ...current, slotDate: event.target.value, newSlotId: "" }))}><option value="">請選擇</option>{rescheduleDateOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div><div className="space-y-2"><Label>新時段</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={rescheduleForm.newSlotId} onChange={event => setRescheduleForm(current => ({ ...current, newSlotId: event.target.value }))}><option value="">請選擇</option>{rescheduleSlotOptions.map(slot => <option key={slot.id} value={slot.id}>{`${slot.startLabel}-${slot.endLabel} / 餘額 ${slot.capacity}`}</option>)}</select></div><div className="space-y-2"><Label>備註</Label><Input value={rescheduleForm.note} onChange={event => setRescheduleForm(current => ({ ...current, note: event.target.value }))} placeholder="例如：住戶要求改期" /></div><div className="flex items-end gap-2"><Button onClick={submitReschedule} disabled={rescheduleMutation.isPending}>{rescheduleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}確認改期</Button><Button variant="outline" onClick={cancelEditingBooking} disabled={rescheduleMutation.isPending}>取消</Button></div></div></TableCell></TableRow> : null}</React.Fragment>)}</TableBody>
+                      <TableBody>{bookings.map(booking => <React.Fragment key={booking.id}><TableRow><TableCell>{booking.id}</TableCell><TableCell>{booking.companyName} / {booking.projectName}</TableCell><TableCell>{booking.unitNumberSnapshot}</TableCell><TableCell>{booking.bookingType}</TableCell><TableCell>{formatDateOnly(booking.slotDate)} {booking.startLabel}-{booking.endLabel}</TableCell><TableCell>{booking.status}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => startEditingBooking(booking)}>{rescheduleForm.bookingId === String(booking.id) ? "編輯中" : "編輯改期"}</Button></TableCell></TableRow>{rescheduleForm.bookingId === String(booking.id) ? <TableRow><TableCell colSpan={7} className="bg-muted/20"><AdminRescheduleFields slotDate={rescheduleForm.slotDate} newSlotId={rescheduleForm.newSlotId} note={rescheduleForm.note} dateOptions={rescheduleDateOptions} slotOptions={rescheduleSlotOptions} isFetching={rescheduleAvailabilityQuery.isFetching} errorMessage={rescheduleAvailabilityQuery.error?.message} isSubmitting={rescheduleMutation.isPending} onChangeDate={nextDate => setRescheduleForm(current => ({ ...current, slotDate: nextDate, newSlotId: "" }))} onChangeSlot={newSlotId => setRescheduleForm(current => ({ ...current, newSlotId }))} onChangeNote={note => setRescheduleForm(current => ({ ...current, note }))} onSyncAvailability={syncRescheduleAvailability} onSubmit={submitReschedule} onCancel={cancelEditingBooking} /></TableCell></TableRow> : null}</React.Fragment>)}</TableBody>
                     </Table>
                   </CardContent>
                 </Card>

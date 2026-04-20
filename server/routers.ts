@@ -17,6 +17,7 @@ import {
   deleteResidentRecord,
   getAdminDashboardData,
   getAdminProfile,
+  getAdminRescheduleAvailability,
   getPublicSiteContext,
   rescheduleBookingRecord,
   searchBookings,
@@ -296,6 +297,12 @@ export const appRouter = router({
           return [];
         }
         return searchBookings(input);
+      }),
+    rescheduleAvailability: publicProcedure
+      .input(z.object({ bookingId: z.number().int().positive() }))
+      .query(({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        return getAdminRescheduleAvailability(input.bookingId);
       }),
     rescheduleBooking: publicProcedure
       .input(
