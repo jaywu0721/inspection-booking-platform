@@ -1,12 +1,12 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { redirectToAdminDashboardAfterLogin } from "./AdminPage";
+import { redirectToAdminDashboardAfterLogin } from "../lib/adminRedirect";
 
 describe("redirectToAdminDashboardAfterLogin", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("invalidates admin queries and redirects to /admin", async () => {
+  it("invalidates admin queries and redirects to root admin entry", async () => {
     const meInvalidate = vi.fn().mockResolvedValue(undefined);
     const dashboardInvalidate = vi.fn().mockResolvedValue(undefined);
     const searchBookingsInvalidate = vi.fn().mockResolvedValue(undefined);
@@ -39,6 +39,6 @@ describe("redirectToAdminDashboardAfterLogin", () => {
     expect(meInvalidate).toHaveBeenCalledTimes(1);
     expect(dashboardInvalidate).toHaveBeenCalledTimes(1);
     expect(searchBookingsInvalidate).toHaveBeenCalledTimes(1);
-    expect(assign).toHaveBeenCalledWith("/admin");
+    expect(assign).toHaveBeenCalledWith("/");
   });
 });

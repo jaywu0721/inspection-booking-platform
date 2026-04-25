@@ -20,5 +20,5 @@ export async function redirectToAdminDashboardAfterLogin(utils: AdminInvalidateU
     utils.admin.dashboard.invalidate(),
     utils.admin.searchBookings.invalidate(),
   ]);
-  window.location.assign("/admin");
+  window.location.assign("/");
 }
