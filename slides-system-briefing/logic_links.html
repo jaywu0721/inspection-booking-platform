@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>核心邏輯一：連結是業務邊界</title>
+  <style>
+    body { margin: 0; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; }
+    .slide-container {
+      width: 1280px;
+      min-height: 720px;
+      box-sizing: border-box;
+      background: linear-gradient(135deg, #0E2433 0%, #132F43 56%, #1A3546 100%);
+      color: #F5F7FA;
+      position: relative;
+      overflow: hidden;
+    }
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(215,224,232,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(215,224,232,0.06) 1px, transparent 1px);
+      background-size: 52px 52px;
+      opacity: 0.24;
+    }
+    .content {
+      position: relative;
+      z-index: 2;
+      padding-top: 42px;
+      padding-left: 50px;
+      padding-right: 50px;
+      box-sizing: border-box;
+    }
+    .topline {
+      width: 176px;
+      height: 4px;
+      background: #2F6BFF;
+      margin-bottom: 16px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      font-weight: 800;
+    }
+    .subtitle {
+      width: 900px;
+      margin-top: 12px;
+      font-size: 17px;
+      line-height: 1.62;
+      color: #D7E0E8;
+    }
+    .main {
+      display: grid;
+      grid-template-columns: 300px 470px 350px;
+      column-gap: 24px;
+      padding-top: 24px;
+      align-items: start;
+    }
+    .left-panel, .right-panel {
+      border-top: 1px solid rgba(215,224,232,0.18);
+      min-height: 500px;
+    }
+    .left-panel {
+      padding-top: 18px;
+    }
+    .kicker {
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: #8FB4FF;
+      margin-bottom: 12px;
+    }
+    .hero {
+      font-size: 30px;
+      line-height: 1.38;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .hero .accent { color: #8FB4FF; }
+    .body-copy {
+      font-size: 16px;
+      line-height: 1.72;
+      color: #D7E0E8;
+      margin-bottom: 18px;
+    }
+    .quote {
+      font-size: 18px;
+      line-height: 1.7;
+      color: #F5F7FA;
+      border-top: 1px solid rgba(47,107,255,0.42);
+      padding-top: 14px;
+    }
+    .matrix {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      border-top: 1px solid rgba(215,224,232,0.18);
+      border-left: 1px solid rgba(215,224,232,0.18);
+    }
+    .cell {
+      min-height: 84px;
+      border-right: 1px solid rgba(215,224,232,0.18);
+      border-bottom: 1px solid rgba(215,224,232,0.18);
+      box-sizing: border-box;
+      padding-top: 12px;
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    .head {
+      font-size: 14px;
+      color: #8FB4FF;
+      letter-spacing: 1px;
+    }
+    .rule-title {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.35;
+      margin-bottom: 4px;
+    }
+    .rule-text {
+      font-size: 15px;
+      line-height: 1.55;
+      color: #D7E0E8;
+    }
+    .right-panel {
+      padding-top: 18px;
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      row-gap: 18px;
+    }
+    .block {
+      border-left: 1px solid rgba(47,107,255,0.42);
+      padding-top: 2px;
+      padding-left: 16px;
+      padding-right: 6px;
+      box-sizing: border-box;
+    }
+    .block-title {
+      font-size: 19px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .block-copy {
+      font-size: 16px;
+      line-height: 1.68;
+      color: #D7E0E8;
+    }
+    .block-copy strong { color: #F5F7FA; }
+    .footer-note {
+      margin-top: 18px;
+      font-size: 15px;
+      line-height: 1.6;
+      color: #D7E0E8;
+    }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="grid"></div>
+    <div class="content">
+      <div class="topline"></div>
+      <h1>核心邏輯一：連結是業務邊界</h1>
+      <div class="subtitle">這套系統不是只用公司或建案去模糊判斷住戶入口，而是把 <strong>booking link</strong> 當成真正的公開入口與管理邊界，避免不同建案、驗別與時段池互相混用。</div>
+      <div class="main">
+        <div class="left-panel">
+          <div class="kicker">CORE DEFINITION</div>
+          <div class="hero">一筆公開連結，
+            <span class="accent">就是一條被明確控制的預約入口。</span>
+          </div>
+          <div class="body-copy">它不只是給住戶點擊的網址，而是把公開流程、可用時段、驗別規則與停用狀態綁在一起的業務邏輯單位。</div>
+          <div class="quote">如果沒有這條邊界，系統表面上只是入口變多；實際上會變成 <span class="accent">資料混池、責任模糊、客服負擔上升</span>。</div>
+        </div>
+        <div>
+          <div class="matrix">
+            <div class="cell"><div class="head">規則</div></div>
+            <div class="cell"><div class="head">業務意義</div></div>
+            <div class="cell"><div class="rule-title">每一筆公開預約都綁定正式連結</div></div>
+            <div class="cell"><div class="rule-text">住戶不是從模糊首頁進站，而是從特定入口進入特定流程，避免不同建案彼此干擾。</div></div>
+            <div class="cell"><div class="rule-title">時段屬於單一連結</div></div>
+            <div class="cell"><div class="rule-text">同一組時段不會被多個公開入口共用，時段容量與開放範圍因此有明確邊界。</div></div>
+            <div class="cell"><div class="rule-title">驗別可跟著連結切分</div></div>
+            <div class="cell"><div class="rule-text">初驗、複驗或不同活動批次可以拆成獨立入口，不必靠人工提醒住戶自己分辨。</div></div>
+            <div class="cell"><div class="rule-title">連結可被啟用、停用與限期</div></div>
+            <div class="cell"><div class="rule-text">公司能決定何時開放、何時關閉，以及住戶在錯誤時點看到什麼訊息，而不是被動收件。</div></div>
+          </div>
+          <div class="footer-note">這種設計的本質，是把「對外公開網址」升級成可被治理的營運資產，而不是一次性行銷連結。</div>
+        </div>
+        <div class="right-panel">
+          <div class="block">
+            <div class="block-title">如果沒有 link 邊界</div>
+            <div class="block-copy">住戶可能從同一首頁進入不同建案；行政得靠人工辨識該走哪個驗別；時段看似共用，其實會讓 <strong>錯建案、錯時段、錯入口</strong> 同時發生。</div>
+          </div>
+          <div class="block">
+            <div class="block-title">導入後的實際效益</div>
+            <div class="block-copy">公司可以把每一次對外開放視為一筆正式入口：誰能進、能約哪個建案、可用哪些時段、何時停用，都有清楚的控制點，也更容易在後台追查問題來源。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

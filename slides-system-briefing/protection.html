@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>目前已補上的營運保護</title>
+  <style>
+    body { margin: 0; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; }
+    .slide-container {
+      width: 1280px;
+      min-height: 720px;
+      box-sizing: border-box;
+      background: linear-gradient(135deg, #0E2433 0%, #143245 58%, #1A3748 100%);
+      color: #F5F7FA;
+      position: relative;
+      overflow: hidden;
+    }
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(215,224,232,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(215,224,232,0.06) 1px, transparent 1px);
+      background-size: 52px 52px;
+      opacity: 0.24;
+    }
+    .content {
+      position: relative;
+      z-index: 2;
+      padding-top: 40px;
+      padding-left: 50px;
+      padding-right: 50px;
+      box-sizing: border-box;
+    }
+    .topline {
+      width: 182px;
+      height: 4px;
+      background: #2F6BFF;
+      margin-bottom: 16px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      font-weight: 800;
+    }
+    .subtitle {
+      margin-top: 12px;
+      width: 940px;
+      font-size: 17px;
+      line-height: 1.62;
+      color: #D7E0E8;
+    }
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 24px;
+      padding-top: 24px;
+      align-items: start;
+    }
+    .panel {
+      min-height: 470px;
+      border-top: 1px solid rgba(215,224,232,0.18);
+      box-sizing: border-box;
+      padding-top: 16px;
+    }
+    .panel-kicker {
+      font-size: 14px;
+      letter-spacing: 1.2px;
+      color: #8FB4FF;
+      margin-bottom: 12px;
+    }
+    .panel-title {
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.4;
+      margin-bottom: 14px;
+    }
+    .matrix {
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      border-top: 1px solid rgba(215,224,232,0.16);
+      border-left: 1px solid rgba(215,224,232,0.16);
+    }
+    .cell {
+      min-height: 58px;
+      border-right: 1px solid rgba(215,224,232,0.16);
+      border-bottom: 1px solid rgba(215,224,232,0.16);
+      box-sizing: border-box;
+      padding-top: 10px;
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    .head {
+      font-size: 13px;
+      letter-spacing: 1.2px;
+      color: #8FB4FF;
+    }
+    .cell-title {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.4;
+      margin-bottom: 4px;
+    }
+    .cell-text {
+      font-size: 14px;
+      line-height: 1.55;
+      color: #D7E0E8;
+    }
+    .panel-note {
+      margin-top: 12px;
+      font-size: 15px;
+      line-height: 1.62;
+      color: #D7E0E8;
+    }
+    .bottom-line {
+      margin-top: 12px; /* reduced from 18 to save vertical space */
+      height: 1px;
+      background: linear-gradient(90deg, rgba(47,107,255,0.9), rgba(215,224,232,0.10));
+    }
+    .bottom-note {
+      padding-top: 8px; /* reduced from 12 */
+      width: 1080px;
+      font-size: 16px;
+      line-height: 1.68;
+      color: #D7E0E8;
+    }
+    .highlight { color: #8FB4FF; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="grid"></div>
+    <div class="content">
+      <div class="topline"></div>
+      <h1>目前已補上的營運保護</h1>
+      <div class="subtitle">最近一輪改善的重點，不是增加更多畫面功能，而是把系統從「可以用」往「比較能放心維運」拉近一步。核心方向包括 <span class="highlight">正式資料保護、測試隔離、交付清理與入口去示範化</span> 四件事。</div>
+
+      <div class="main">
+        <div class="panel">
+          <div class="panel-kicker">DATA PROTECTION</div>
+          <div class="panel-title">正式資料不再被初始化或清理流程誤傷</div>
+          <div class="matrix">
+            <div class="cell"><div class="head">保護項目</div></div>
+            <div class="cell"><div class="head">目前狀態</div></div>
+            <div class="cell"><div class="cell-title">啟動 seed</div></div>
+            <div class="cell"><div class="cell-text">改成只補缺資料，不覆蓋既有正式公司內容、建案設定與文案。</div></div>
+            <div class="cell"><div class="cell-title">示範資料</div></div>
+            <div class="cell"><div class="cell-text">不再預設自動建立；需用明確旗標或獨立流程處理。</div></div>
+            <div class="cell"><div class="cell-title">清理腳本</div></div>
+            <div class="cell"><div class="cell-text">僅刪除測試／示範內容，避免影響正式住戶與建案資料。</div></div>
+            <div class="cell"><div class="cell-title">正式內容盤點</div></div>
+            <div class="cell"><div class="cell-text">已整理正式資料、文案與設定核對報告，作為交付與維運基準。</div></div>
+          </div>
+          <div class="panel-note">這代表重新部署、更新與交付流程，現在較不容易把正式營運資料當成測試資料一起清掉。</div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-kicker">TEST & DELIVERY CONTROL</div>
+          <div class="panel-title">測試與交付已被要求和正式資料分開</div>
+          <div class="matrix">
+            <div class="cell"><div class="head">控制項目</div></div>
+            <div class="cell"><div class="head">目前狀態</div></div>
+            <div class="cell"><div class="cell-title">測試資料庫閘門</div></div>
+            <div class="cell"><div class="cell-text">沒有獨立 `VITEST_DATABASE_URL` 就不能跑測試，避免直接碰正式資料庫。</div></div>
+            <div class="cell"><div class="cell-title">隔離驗證</div></div>
+            <div class="cell"><div class="cell-text">已做獨立資料庫驗證與測試保護 proof，證明測試流程可被隔離。</div></div>
+            <div class="cell"><div class="cell-title">交付清理</div></div>
+            <div class="cell"><div class="cell-text">示範內容與 server 測試檔已從正式交付版本中清除，避免正式站殘留測試痕跡。</div></div>
+            <div class="cell"><div class="cell-title">前台導引</div></div>
+            <div class="cell"><div class="cell-text">已移除示範連結導引，正式站不再把住戶導回測試內容或預設 demo 流程。</div></div>
+          </div>
+          <div class="panel-note">從開發者角度看，這些控制不是花俏功能，卻是每次更新能否穩定交付的底線。</div>
+        </div>
+      </div>
+
+      <div class="bottom-line"></div>
+      <div class="bottom-note">要直接講明白：已顯著降低正式資料被覆蓋、被測試誤碰與示範污染的風險。後續仍需補上正式備份／還原與端到端驗證。</div>
+    </div>
+  </div>
+</body>
+</html>

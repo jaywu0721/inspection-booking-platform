@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>管理端是營運核心</title>
+  <style>
+    body { margin: 0; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; }
+    .slide-container {
+      width: 1280px;
+      min-height: 720px;
+      box-sizing: border-box;
+      background: linear-gradient(135deg, #0E2433 0%, #153247 58%, #203A4A 100%);
+      color: #F5F7FA;
+      position: relative;
+      overflow: hidden;
+    }
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(215,224,232,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(215,224,232,0.06) 1px, transparent 1px);
+      background-size: 52px 52px;
+      opacity: 0.24;
+    }
+    .content {
+      position: relative;
+      z-index: 2;
+      padding-top: 42px; /* keep title top padding */
+      padding-left: 52px;
+      padding-right: 52px;
+      box-sizing: border-box;
+    }
+    .accent-line {
+      width: 176px;
+      height: 4px;
+      background: #2F6BFF;
+      margin-bottom: 16px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      font-weight: 800;
+    }
+    .subtitle {
+      margin-top: 12px;
+      width: 780px;
+      font-size: 17px;
+      line-height: 1.65;
+      color: #D7E0E8;
+    }
+    .main {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      column-gap: 30px;
+      padding-top: 20px;
+      align-items: start;
+    }
+    .left-architecture {
+      min-height: 470px;
+      border-top: 1px solid rgba(215,224,232,0.18);
+      border-left: 1px solid rgba(215,224,232,0.12);
+      box-sizing: border-box;
+      padding-top: 8px; /* reduced inner padding to save height */
+      padding-left: 18px;
+      padding-right: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+    }
+    .left-title {
+      font-size: 15px;
+      letter-spacing: 1px;
+      color: #8FB4FF;
+      margin-bottom: 14px;
+    }
+    .hub {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.35;
+      margin-bottom: 12px;
+      width: 320px;
+    }
+    .hub-note {
+      font-size: 16px;
+      line-height: 1.7;
+      color: #D7E0E8;
+      margin-bottom: 8px; /* tightened to reduce total height */
+      width: 340px;
+    }
+    .module-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 14px;
+      position: relative;
+    }
+    .module {
+      min-height: 70px; /* reduced from 78px to shorten rows */
+      border-top: 1px solid rgba(47,107,255,0.65);
+      border-right: 1px solid rgba(215,224,232,0.12);
+      border-left: 1px solid rgba(215,224,232,0.12);
+      border-bottom: 1px solid rgba(215,224,232,0.12);
+      box-sizing: border-box;
+      padding-top: 8px; /* slightly reduced inner padding */
+      padding-left: 14px;
+      padding-right: 14px;
+      background: rgba(255,255,255,0.03);
+    }
+    .module-name {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.35;
+      margin-bottom: 6px;
+    }
+    .module-desc {
+      font-size: 15px;
+      line-height: 1.55;
+      color: #D7E0E8;
+    }
+    .right-panel {
+      min-height: 470px;
+      border-top: 1px solid rgba(215,224,232,0.18);
+      border-right: 1px solid rgba(215,224,232,0.12);
+      box-sizing: border-box;
+      padding-top: 12px; /* keep concise */
+      padding-left: 22px;
+      padding-right: 8px;
+    }
+    .role-block {
+      border-bottom: 1px solid rgba(215,224,232,0.14);
+      padding-top: 4px;
+      padding-right: 14px;
+      min-height: 110px;
+      box-sizing: border-box;
+    }
+    .role-block:last-child {
+      border-bottom: none;
+      min-height: 120px;
+    }
+    .role-label {
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: #8FB4FF;
+      margin-bottom: 8px;
+    }
+    .role-title {
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1.35;
+      margin-bottom: 8px;
+    }
+    .role-text {
+      font-size: 17px;
+      line-height: 1.7;
+      color: #D7E0E8;
+      width: 420px; /* narrower to wrap earlier and save vertical space */
+    }
+    .footer-note {
+      position: absolute;
+      left: 52px;
+      right: 52px;
+      top: 652px;
+      border-top: 1px solid rgba(47,107,255,0.35);
+      padding-top: 12px;
+      font-size: 16px;
+      line-height: 1.65;
+      color: #D7E0E8;
+      z-index: 2;
+    }
+    .highlight { color: #8FB4FF; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="grid"></div>
+    <div class="content">
+      <div class="accent-line"></div>
+      <h1>管理端是營運核心</h1>
+      <div class="subtitle">從公司主檔、建案、住戶、分享連結、時段到改期查詢，這套系統的真正價值在於把高頻營運工作收斂到同一個後台，而不是分散在不同工具之間。</div>
+
+      <div class="main">
+        <div class="left-architecture">
+          <div class="left-title">ADMIN OPERATIONS MAP</div>
+          <div class="hub">管理端不是展示頁，而是營運中樞。</div>
+          <div class="hub-note">後台把多公司、多建案、多筆住戶驗證與時段控管收進同一個入口，讓行政、客服與營運人員可以在相同資料脈絡下工作。</div>
+          <div class="module-grid">
+            <div class="module">
+              <div class="module-name">品牌與建案</div>
+              <div class="module-desc">維護公司主檔、建案資訊、聯絡方式、FAQ 與正式文案。</div>
+            </div>
+            <div class="module">
+              <div class="module-name">住戶資料</div>
+              <div class="module-desc">綁定戶號與手機，作為住戶驗證與預約查詢的基礎。</div>
+            </div>
+            <div class="module">
+              <div class="module-name">預約連結</div>
+              <div class="module-desc">產生正式分享網址，管理啟用狀態、停用原因與開放邏輯。</div>
+            </div>
+            <div class="module">
+              <div class="module-name">時段管理</div>
+              <div class="module-desc">設定日期、時段、容量與啟用狀態，避免重複建立與超額開放。</div>
+            </div>
+            <div class="module">
+              <div class="module-name">預約查詢</div>
+              <div class="module-desc">依建案、戶號、日期、類型與狀態搜尋既有預約紀錄。</div>
+            </div>
+            <div class="module">
+              <div class="module-name">改期處理</div>
+              <div class="module-desc">後台直接調整時段，同步保留改期歷程、備註與目前狀態。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="right-panel">
+          <div class="role-block">
+            <div class="role-label">ROLE 01</div>
+            <div class="role-title">把公開入口與內部資料接起來</div>
+            <div class="role-text">管理端決定哪一筆分享連結對外可用、哪一組時段對應哪個建案，讓住戶入口不是隨機表單，而是有邊界的正式流程。</div>
+          </div>
+          <div class="role-block">
+            <div class="role-label">ROLE 02</div>
+            <div class="role-title">把營運控管變成可追溯紀錄</div>
+            <div class="role-text">時段是否額滿、住戶是否已預約、改期後原時段與新時段如何變化，都不再只靠人工記憶，而是回到系統資料與歷程紀錄。</div>
+          </div>
+          <div class="role-block">
+            <div class="role-label">ROLE 03</div>
+            <div class="role-title">把多角色工作收斂成同一操作面</div>
+            <div class="role-text">決策者看的是資料集中與風險可控，行政與客服看的是查詢與改期效率，營運與開發看的是邏輯一致與維護成本。<span class="highlight">這三者都靠管理端串起來。</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-note">如果把這些資訊拆散在 Excel、表單與對話紀錄裡，後面只會更亂；把它們集中到後台，才有可能形成真正可營運的預約系統。</div>
+  </div>
+</body>
+</html>

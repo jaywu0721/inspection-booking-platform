@@ -1,0 +1,168 @@
+{
+  "project_info": {
+    "title": "驗屋預約管理系統",
+    "created": 1777190520.8305993,
+    "last_updated": 1777191031.633526,
+    "total_slides": 13
+  },
+  "slides": [
+    {
+      "id": "cover",
+      "state": "edited",
+      "pageNum": 1
+    },
+    {
+      "id": "problem",
+      "state": "edited",
+      "pageNum": 2
+    },
+    {
+      "id": "entry",
+      "state": "edited",
+      "pageNum": 3
+    },
+    {
+      "id": "admin_core",
+      "state": "edited",
+      "pageNum": 4
+    },
+    {
+      "id": "resident_flow",
+      "state": "edited",
+      "pageNum": 5
+    },
+    {
+      "id": "logic_links",
+      "state": "edited",
+      "pageNum": 6
+    },
+    {
+      "id": "logic_capacity",
+      "state": "edited",
+      "pageNum": 7
+    },
+    {
+      "id": "logic_history",
+      "state": "edited",
+      "pageNum": 8
+    },
+    {
+      "id": "protection",
+      "state": "edited",
+      "pageNum": 9
+    },
+    {
+      "id": "ux_eval",
+      "state": "edited",
+      "pageNum": 10
+    },
+    {
+      "id": "priorities",
+      "state": "edited",
+      "pageNum": 11
+    },
+    {
+      "id": "positioning",
+      "state": "edited",
+      "pageNum": 12
+    },
+    {
+      "id": "closing",
+      "state": "edited",
+      "pageNum": 13
+    }
+  ],
+  "outline": [
+    {
+      "id": "cover",
+      "title": "驗屋預約管理系統",
+      "summary": "封面頁，呈現簡報主題、副標與簡報定位：公司介紹與開發者測評。",
+      "image_plan": "",
+      "slide_template_key": ""
+    },
+    {
+      "id": "problem",
+      "title": "這套系統在解決什麼問題",
+      "summary": "說明系統要解決的營運痛點，對照傳統 Excel 與人工溝通流程的缺陷。",
+      "image_plan": "",
+      "slide_template_key": ""
+    },
+    {
+      "id": "entry",
+      "title": "角色入口已被重新定義",
+      "summary": "說明根網址改為管理入口、分享連結保留住戶流程的單網域分流策略。",
+      "image_plan": "",
+      "slide_template_key": ""
+    },
+    {
+      "id": "admin_core",
+      "title": "管理端是營運核心",
+      "summary": "整理管理端模組與其在日常營運中的功能角色。",
+      "image_plan": "",
+      "slide_template_key": ""
+    },
+    {
+      "id": "resident_flow",
+      "title": "住戶端流程被刻意做成單一路徑",
+      "summary": "說明住戶從正式分享連結進入、驗證、查看時段到預約送出的固定流程。",
+      "image_plan": "",
+      "slide_template_key": ""
+    },
+    {
+      "id": "logic_links",
+      "title": "核心邏輯一：連結是業務邊界",
+      "summary": "解釋 booking link 如何作為公開入口與業務邊界，避免不同建案或驗別混用。",
+      "image_plan": "",
+      "slide_template_key": ""
+    },
+    {
+      "id": "logic_capacity",
+      "title": "核心邏輯二：容量控制不只看前端",
+      "summary": "說明時段餘額、改期同步與後端再次驗證名額的設計。",
+      "image_plan": "/home/ubuntu/upload/pasted_file_V2mLQR_image.png - The image shows a form for rescheduling appointments, which directly illustrates the concept of '保留歷程' (retaining history) and '改期動作' (rescheduling actions) mentioned in the slide.",
+      "slide_template_key": ""
+    },
+    {
+      "id": "logic_history",
+      "title": "核心邏輯三：系統偏向保留歷程",
+      "summary": "說明住戶、時段與改期資料的保留策略及其營運意義。",
+      "image_plan": "",
+      "slide_template_key": ""
+    },
+    {
+      "id": "protection",
+      "title": "目前已補上的營運保護",
+      "summary": "整理資料保護、測試隔離與正式內容保留等近期改善。",
+      "image_plan": "",
+      "slide_template_key": ""
+    },
+    {
+      "id": "ux_eval",
+      "title": "使用者角度的優點與痛點",
+      "summary": "從管理員與住戶角度總結操作優勢與現階段痛點。",
+      "image_plan": "",
+      "slide_template_key": ""
+    },
+    {
+      "id": "priorities",
+      "title": "我會優先修正的系統邏輯",
+      "summary": "以開發者角度提出高優先與中優先的改善方向。",
+      "image_plan": "",
+      "slide_template_key": ""
+    },
+    {
+      "id": "positioning",
+      "title": "對公司可怎麼介紹這套系統",
+      "summary": "整理這套系統對決策者、行政、營運與開發團隊的價值定位。",
+      "image_plan": "",
+      "slide_template_key": ""
+    },
+    {
+      "id": "closing",
+      "title": "結論：可上線，但還不是可放著不管",
+      "summary": "總結系統已具備可運作骨架，同時點出長期營運仍需補足的能力。",
+      "image_plan": "",
+      "slide_template_key": ""
+    }
+  ]
+}

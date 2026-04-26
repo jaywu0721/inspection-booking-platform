@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>這套系統在解決什麼問題</title>
+  <style>
+    body { margin: 0; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; }
+    .slide-container {
+      width: 1280px;
+      min-height: 720px;
+      box-sizing: border-box;
+      background: linear-gradient(135deg, #0E2433 0%, #132F43 62%, #1A3546 100%);
+      color: #F5F7FA;
+      position: relative;
+      overflow: hidden;
+    }
+    .grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(215,224,232,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(215,224,232,0.06) 1px, transparent 1px); background-size: 52px 52px; opacity: 0.24; }
+    .content { position: relative; z-index: 2; padding-top: 40px; padding-left: 50px; padding-right: 50px; box-sizing: border-box; }
+    .topline { width: 170px; height: 4px; background: #2F6BFF; margin-bottom: 16px; }
+    h1 { font-size: 32px; margin: 0; font-weight: 800; }
+    .subtitle { font-size: 17px; color: #D7E0E8; margin-top: 12px; width: 760px; line-height: 1.6; }
+    .main { display: grid; grid-template-columns: 320px 1fr; column-gap: 28px; padding-top: 20px; }
+    .left-block { border-top: 1px solid rgba(215,224,232,0.18); padding-top: 16px; }
+    .big-copy { font-size: 28px; line-height: 1.38; font-weight: 700; margin-bottom: 12px; }
+    .small-copy { font-size: 16px; line-height: 1.7; color: #D7E0E8; }
+    .right-grid { display: grid; grid-template-columns: 220px 1fr; border-top: 1px solid rgba(215,224,232,0.18); border-left: 1px solid rgba(215,224,232,0.18); }
+    .cell { min-height: 54px; border-right: 1px solid rgba(215,224,232,0.18); border-bottom: 1px solid rgba(215,224,232,0.18); box-sizing: border-box; padding-top: 10px; padding-left: 12px; padding-right: 12px; }
+    .head { font-size: 14px; letter-spacing: 1px; color: #8FB4FF; }
+    .cell-title { font-size: 18px; font-weight: 700; line-height: 1.3; margin-bottom: 4px; }
+    .cell-text { font-size: 15px; color: #D7E0E8; line-height: 1.5; }
+    .footer-note { margin-top: 14px; font-size: 16px; color: #D7E0E8; line-height: 1.6; width: 760px; }
+    .highlight { color: #8FB4FF; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="grid"></div>
+    <div class="content">
+      <div class="topline"></div>
+      <h1>這套系統在解決什麼問題</h1>
+      <div class="subtitle">它不是多一個表單，而是把公司資料、建案、住戶驗證、公開連結、時段與改期歷程全部收斂到同一個管理入口。</div>
+      <div class="main">
+        <div class="left-block">
+          <div class="big-copy">重點不是讓住戶能預約，而是讓公司能<span class="highlight">穩定管理預約</span>。</div>
+          <div class="small-copy">如果仍靠 Excel、對話與人工追蹤，建案一多，就會同時放大連結混亂、時段衝突與歷程斷裂的風險。</div>
+        </div>
+        <div>
+          <div class="right-grid">
+            <div class="cell"><div class="head">傳統做法</div></div>
+            <div class="cell"><div class="head">系統做法</div></div>
+            <div class="cell"><div class="cell-title">資料散落</div><div class="cell-text">建案越多，版本越容易不一致。</div></div>
+            <div class="cell"><div class="cell-title">集中管理公司、建案與住戶</div><div class="cell-text">讓營運資訊回到正式資料來源。</div></div>
+            <div class="cell"><div class="cell-title">公開入口混亂</div><div class="cell-text">住戶容易走錯建案或驗別。</div></div>
+            <div class="cell"><div class="cell-title">正式分享連結作為唯一入口</div><div class="cell-text">入口簡化，責任邊界更清楚。</div></div>
+            <div class="cell"><div class="cell-title">時段靠人工控管</div><div class="cell-text">改期後最容易發生名額不同步。</div></div>
+            <div class="cell"><div class="cell-title">用容量與狀態計算餘額</div><div class="cell-text">同一套規則支撐預約與改期。</div></div>
+            <div class="cell"><div class="cell-title">改期只留在對話裡</div><div class="cell-text">過一段時間後難以追溯。</div></div>
+            <div class="cell"><div class="cell-title">保留改期歷程與備註</div><div class="cell-text">方便查詢、交接與責任釐清。</div></div>
+          </div>
+          <div class="footer-note">從公司角度看，這套系統真正處理的是 <span class="highlight">營運控管失序</span>，不是單點功能不足。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

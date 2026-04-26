@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>角色入口已被重新定義</title>
+  <style>
+    body { margin: 0; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; }
+    .slide-container {
+      width: 1280px;
+      min-height: 720px;
+      box-sizing: border-box;
+      background: linear-gradient(135deg, #0E2433 0%, #132F43 58%, #17384C 100%);
+      color: #F5F7FA;
+      position: relative;
+      overflow: hidden;
+    }
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(215,224,232,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(215,224,232,0.06) 1px, transparent 1px);
+      background-size: 52px 52px;
+      opacity: 0.24;
+    }
+    .content {
+      position: relative;
+      z-index: 2;
+      padding-top: 40px;
+      padding-left: 48px;
+      padding-right: 48px;
+      box-sizing: border-box;
+    }
+    .topline {
+      width: 180px;
+      height: 4px;
+      background: #2F6BFF;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 32px;
+      margin: 0;
+      font-weight: 800;
+    }
+    .subtitle {
+      font-size: 17px;
+      line-height: 1.65;
+      color: #D7E0E8;
+      width: 860px;
+      margin-top: 12px;
+    }
+    .flow-layout {
+      display: grid;
+      grid-template-columns: 1fr 300px 1fr;
+      column-gap: 18px;
+      align-items: start;
+      padding-top: 22px;
+    }
+    .route-panel {
+      min-height: 188px;
+      border-top: 1px solid rgba(215,224,232,0.18);
+      border-bottom: 1px solid rgba(215,224,232,0.18);
+      box-sizing: border-box;
+      padding-top: 20px;
+      padding-left: 16px;
+      padding-right: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+    }
+    .panel-kicker {
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: #8FB4FF;
+      margin-bottom: 10px;
+    }
+    .panel-title {
+      font-size: 27px;
+      line-height: 1.35;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .panel-copy {
+      font-size: 16px;
+      line-height: 1.65;
+      color: #D7E0E8;
+    }
+    .center-box {
+      min-height: 188px;
+      border: 1px solid rgba(47,107,255,0.35);
+      box-sizing: border-box;
+      padding-top: 26px;
+      padding-left: 18px;
+      padding-right: 18px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(47,107,255,0.10), rgba(255,255,255,0.03));
+    }
+    .center-label {
+      font-size: 13px;
+      letter-spacing: 2px;
+      color: #8FB4FF;
+      margin-bottom: 14px;
+    }
+    .domain {
+      font-size: 25px;
+      line-height: 1.45;
+      font-weight: 700;
+      margin-bottom: 14px;
+      word-break: break-word;
+    }
+    .center-copy {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #D7E0E8;
+    }
+    .matrix {
+      display: grid;
+      grid-template-columns: 280px 280px 1fr;
+      margin-top: 22px;
+      border-top: 1px solid rgba(215,224,232,0.18);
+      border-left: 1px solid rgba(215,224,232,0.18);
+    }
+    .cell {
+      min-height: 54px;
+      border-right: 1px solid rgba(215,224,232,0.18);
+      border-bottom: 1px solid rgba(215,224,232,0.18);
+      box-sizing: border-box;
+      padding-top: 10px;
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    .head {
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: #8FB4FF;
+    }
+    .cell-title {
+      font-size: 17px;
+      line-height: 1.4;
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+    .cell-text {
+      font-size: 15px;
+      line-height: 1.55;
+      color: #D7E0E8;
+    }
+    .risk-note {
+      margin-top: 16px;
+      font-size: 16px;
+      line-height: 1.65;
+      color: #D7E0E8;
+      width: 980px;
+    }
+    .highlight { color: #8FB4FF; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="grid"></div>
+    <div class="content">
+      <div class="topline"></div>
+      <h1>角色入口已被重新定義</h1>
+      <div class="subtitle">目前系統採用 <span class="highlight">同一主網域、不同參數分流角色</span> 的策略。沒有預約參數時，根網址直接作為管理入口；帶有正式分享參數時，才會進入住戶預約流程。</div>
+
+      <div class="flow-layout">
+        <div class="route-panel">
+          <div class="panel-kicker">PATH A｜無分享參數</div>
+          <div class="panel-title">根網址直接進管理員登入</div>
+          <div class="panel-copy">內部人員不需要再手動輸入 <span class="highlight">/admin</span>。從實際使用角度看，入口變短，教育成本也更低。</div>
+        </div>
+
+        <div class="center-box">
+          <div class="center-label">SINGLE DOMAIN ENTRY</div>
+          <div class="domain">inspect.eaglebuilt.company</div>
+          <div class="center-copy">用同一個主網址承接兩種角色，但用參數與路徑條件把管理端與住戶端流程分開。</div>
+        </div>
+
+        <div class="route-panel">
+          <div class="panel-kicker">PATH B｜帶正式 link 參數</div>
+          <div class="panel-title">分享連結仍保留住戶預約流程</div>
+          <div class="panel-copy">住戶只從專屬連結進入，不再把首頁當公開入口，能降低誤入錯建案或錯驗別的機率。</div>
+        </div>
+      </div>
+
+      <div class="matrix">
+        <div class="cell"><div class="head">入口情境</div></div>
+        <div class="cell"><div class="head">目前行為</div></div>
+        <div class="cell"><div class="head">對公司的意義</div></div>
+
+        <div class="cell"><div class="cell-title">`/` 無參數</div></div>
+        <div class="cell"><div class="cell-title">顯示管理員登入頁</div></div>
+        <div class="cell"><div class="cell-text">內部人員少打一段網址，後台入口更直接。</div></div>
+
+        <div class="cell"><div class="cell-title">`?link=正式 token`</div></div>
+        <div class="cell"><div class="cell-title">進入住戶驗證／預約流程</div></div>
+        <div class="cell"><div class="cell-text">客戶只從專屬連結進入，不與內部登入入口混用。</div></div>
+
+        <div class="cell"><div class="cell-title">缺少完整參數</div></div>
+        <div class="cell"><div class="cell-title">顯示不可預約或錯誤頁</div></div>
+        <div class="cell"><div class="cell-text">雖然會增加失敗提示，但能避免住戶進到錯的流程。</div></div>
+      </div>
+
+      <div class="risk-note">這個策略的優點是入口清楚、品牌網址更短；風險是 <span class="highlight">分享參數一旦遺失或被手動改動</span>，住戶就無法進入正確的預約頁面。因此正式營運上，連結傳遞與客服話術必須一起配套。</div>
+    </div>
+  </div>
+</body>
+</html>

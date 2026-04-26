@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>我會優先修正的系統邏輯</title>
+  <style>
+    body { margin: 0; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; }
+    .slide-container {
+      width: 1280px;
+      min-height: 720px;
+      box-sizing: border-box;
+      background: linear-gradient(135deg, #0E2433 0%, #143245 58%, #1B394A 100%);
+      color: #F5F7FA;
+      position: relative;
+      overflow: hidden;
+    }
+    .grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(215,224,232,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(215,224,232,0.06) 1px, transparent 1px); background-size: 52px 52px; opacity: 0.24; }
+    .content { position: relative; z-index: 2; padding-top: 40px; padding-left: 50px; padding-right: 50px; box-sizing: border-box; }
+    .topline { width: 178px; height: 4px; background: #2F6BFF; margin-bottom: 16px; }
+    h1 { margin: 0; font-size: 32px; font-weight: 800; line-height: 1.25; }
+    .subtitle { width: 960px; margin-top: 12px; font-size: 17px; line-height: 1.62; color: #D7E0E8; }
+    .main { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; padding-top: 18px; align-items: start; }
+    .panel { min-height: 420px; border-top: 1px solid rgba(215,224,232,0.18); box-sizing: border-box; padding-top: 10px; }
+    .panel-label { font-size: 14px; letter-spacing: 1.2px; color: #8FB4FF; margin-bottom: 8px; }
+    .panel-title { font-size: 26px; font-weight: 800; line-height: 1.35; margin-bottom: 10px; }
+    .priority-item { border-top: 1px solid rgba(215,224,232,0.16); min-height: 96px; box-sizing: border-box; padding-top: 6px; padding-left: 2px; padding-right: 10px; }
+    .item-head { font-size: 19px; font-weight: 700; line-height: 1.42; margin-bottom: 4px; }
+    .item-why { font-size: 15px; line-height: 1.58; color: #F5F7FA; margin-bottom: 2px; }
+    .item-risk { font-size: 15px; line-height: 1.58; color: #D7E0E8; }
+    .bottom-line { margin-top: 12px; height: 1px; background: linear-gradient(90deg, rgba(47,107,255,0.88), rgba(215,224,232,0.12)); }
+    .footer-note { padding-top: 10px; width: 1120px; font-size: 16px; line-height: 1.65; color: #D7E0E8; }
+    .accent { color: #8FB4FF; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="grid"></div>
+    <div class="content">
+      <div class="topline"></div>
+      <h1>我會優先修正的系統邏輯</h1>
+      <div class="subtitle">如果站在開發者對公司負責的角度，優先順序不應該看哪個畫面最漂亮，而要看 <span class="accent">哪一個問題最可能影響正式營運、增加客服負擔或讓資料判斷失真</span>。以下是我會先後處理的改善方向。</div>
+
+      <div class="main">
+        <div class="panel">
+          <div class="panel-label">HIGH PRIORITY</div>
+          <div class="panel-title">先修會影響正式營運的邏輯</div>
+
+          <div class="priority-item">
+            <div class="item-head">1. 補強有效分享連結的真實整合驗證</div>
+            <div class="item-why">原因：定期實測分享連結，避免住戶被導向錯誤入口。</div>
+            <div class="item-risk">不修的風險：住戶卡在錯誤入口、客服詢問增加。</div>
+          </div>
+
+          <div class="priority-item">
+            <div class="item-head">2. 增加改期成功後的即時回饋與列表更新</div>
+            <div class="item-why">原因：確保管理員改期後表格與時段立刻反映變動。</div>
+            <div class="item-risk">不修的風險：重複送出或轉為人工確認，降低效率。</div>
+          </div>
+
+          <div class="priority-item">
+            <div class="item-head">3. 建立正式備份與還原流程</div>
+            <div class="item-why">原因：遇到誤刪或批次誤改時能快速回復資料。</div>
+            <div class="item-risk">不修的風險：單次失誤可能導致高額補救成本。</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-label">MEDIUM PRIORITY</div>
+          <div class="panel-title">下一階段補強可讀性與擴充性</div>
+
+          <div class="priority-item">
+            <div class="item-head">1. 強化住戶錯誤提示與替代指引</div>
+            <div class="item-why">原因：清楚指示下一步，減少住戶困惑與客服負擔。</div>
+            <div class="item-risk">不修的風險：營運效率被看不見的小問題侵蝕。</div>
+          </div>
+
+          <div class="priority-item">
+            <div class="item-head">2. 補齊搜尋、篩選與歷程閱讀能力</div>
+            <div class="item-why">原因：隨著資料增多，需要更好篩選與紀錄檢索。</div>
+            <div class="item-risk">不修的風險：無法快速回答誰改過、何時改等問題。</div>
+          </div>
+
+          <div class="priority-item">
+            <div class="item-head">3. 建立更完整的端到端驗證清單</div>
+            <div class="item-why">原因：把關鍵流程串成定期檢查清單，降低更新風險。</div>
+            <div class="item-risk">不修的風險：更新後容易出現「改一處、壞另一處」的問題。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-line"></div>
+      <div class="footer-note">這個排序原則很直接：<span class="accent">先修會影響正式營運與資料可信度的問題，再修會影響體驗與擴充效率的問題</span>。若要當作長期營運工具，請依此順序執行。</div>
+    </div>
+  </div>
+</body>
+</html>

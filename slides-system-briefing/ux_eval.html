@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>使用者角度的優點與痛點</title>
+  <style>
+    body { margin: 0; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; }
+    .slide-container {
+      width: 1280px;
+      min-height: 720px;
+      box-sizing: border-box;
+      background: linear-gradient(135deg, #0E2433 0%, #143245 58%, #1B394A 100%);
+      color: #F5F7FA;
+      position: relative;
+      overflow: hidden;
+    }
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(215,224,232,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(215,224,232,0.06) 1px, transparent 1px);
+      background-size: 52px 52px;
+      opacity: 0.24;
+    }
+    .content {
+      position: relative;
+      z-index: 2;
+      padding-top: 40px; /* unchanged: title top spacing must stay */
+      padding-left: 48px;
+      padding-right: 48px;
+      box-sizing: border-box;
+    }
+    .topline {
+      width: 176px;
+      height: 4px;
+      background: #2F6BFF;
+      margin-bottom: 16px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    .subtitle {
+      width: 930px;
+      margin-top: 12px;
+      font-size: 17px;
+      line-height: 1.62;
+      color: #D7E0E8;
+    }
+    /* layout refreshed with reduced vertical padding and min-heights */
+    .panel-wrap {
+      display: grid;
+      grid-template-columns: 1fr 180px 1fr;
+      column-gap: 20px;
+      padding-top: 12px; /* reduced */
+      align-items: start;
+    }
+    .side {
+      min-height: 370px; /* reduced from 470 */
+      border-top: 1px solid rgba(215,224,232,0.18);
+      border-right: 1px solid rgba(215,224,232,0.10);
+      border-left: 1px solid rgba(215,224,232,0.10);
+      box-sizing: border-box;
+      padding-top: 8px; /* reduced */
+      padding-left: 12px;
+      padding-right: 12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    }
+    .side-label {
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: #8FB4FF;
+      margin-bottom: 8px;
+    }
+    .side-title {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.35;
+      margin-bottom: 10px;
+    }
+    .item {
+      border-top: 1px solid rgba(215,224,232,0.14);
+      min-height: 84px; /* reduced from 108 */
+      box-sizing: border-box;
+      padding-top: 8px; /* reduced */
+    }
+    .item-head {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.4;
+      margin-bottom: 6px;
+    }
+    .item-good {
+      font-size: 15px;
+      line-height: 1.58;
+      color: #F5F7FA;
+      margin-bottom: 4px;
+    }
+    .item-pain {
+      font-size: 15px;
+      line-height: 1.58;
+      color: #D7E0E8;
+    }
+    .center-axis {
+      min-height: 370px; /* reduced from 470 */
+      border-top: 1px solid rgba(47,107,255,0.45);
+      border-bottom: 1px solid rgba(47,107,255,0.18);
+      box-sizing: border-box;
+      padding-top: 12px; /* reduced */
+      text-align: center;
+      background: linear-gradient(180deg, rgba(47,107,255,0.08), rgba(255,255,255,0.02));
+    }
+    .axis-title {
+      font-size: 14px;
+      letter-spacing: 1.4px;
+      color: #8FB4FF;
+      margin-bottom: 12px;
+    }
+    .axis-node {
+      border-top: 1px solid rgba(215,224,232,0.16);
+      min-height: 84px; /* reduced */
+      box-sizing: border-box;
+      padding-top: 12px; /* reduced */
+      padding-left: 10px;
+      padding-right: 10px;
+    }
+    .axis-head {
+      font-size: 19px;
+      font-weight: 700;
+      line-height: 1.4;
+      margin-bottom: 6px;
+    }
+    .axis-copy {
+      font-size: 14px;
+      line-height: 1.55;
+      color: #D7E0E8;
+    }
+    .footer {
+      position: absolute;
+      left: 48px;
+      right: 48px;
+      top: 632px; /* moved up to fit into 720px */
+      border-top: 1px solid rgba(47,107,255,0.35);
+      padding-top: 12px;
+      font-size: 16px;
+      line-height: 1.62;
+      color: #D7E0E8;
+      z-index: 2;
+    }
+    .accent { color: #8FB4FF; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="grid"></div>
+    <div class="content">
+      <div class="topline"></div>
+      <h1>使用者角度的優點與痛點</h1>
+      <div class="subtitle">從使用者角度：優點是入口收斂、流程清楚、資料可追；痛點是偏向營運控管，需更精準的說明與回饋。</div>
+
+      <div class="panel-wrap">
+        <div class="side">
+          <div class="side-label">ADMIN VIEW</div>
+          <div class="side-title">管理員看到的是效率與可控性</div>
+
+          <div class="item">
+            <div class="item-head">入口與日常操作</div>
+            <div class="item-good">優點：根網址即可進入管理入口，對內部人員更直接。</div>
+            <div class="item-pain">痛點：未說明時，新使用者可能誤以為不是對外網站。</div>
+          </div>
+
+          <div class="item">
+            <div class="item-head">時段與改期控管</div>
+            <div class="item-good">優點：改期可見時段與餘額，額滿不可選。</div>
+            <div class="item-pain">痛點：需要更醒目的操作回饋，確保資料已更新。</div>
+          </div>
+
+          <div class="item">
+            <div class="item-head">資料與歷程閱讀</div>
+            <div class="item-good">優點：保留住戶與改期歷程，利於查詢與交接。</div>
+            <div class="item-pain">痛點：資料增多後，搜尋與視覺化需求會增加。</div>
+          </div>
+        </div>
+
+        <div class="center-axis">
+          <div class="axis-title">EVALUATION AXIS</div>
+          <div class="axis-node">
+            <div class="axis-head">入口清晰度</div>
+            <div class="axis-copy">是否能在最少說明下，讓使用者進入正確流程。</div>
+          </div>
+          <div class="axis-node">
+            <div class="axis-head">操作可預期性</div>
+            <div class="axis-copy">顯示與送出結果是否遵循同一套規則。</div>
+          </div>
+          <div class="axis-node">
+            <div class="axis-head">錯誤成本</div>
+            <div class="axis-copy">流程出錯時，系統是否能提前擋掉錯誤。</div>
+          </div>
+          <div class="axis-node">
+            <div class="axis-head">維運延展性</div>
+            <div class="axis-copy">規模增加時，是否仍能維持可讀與可管。</div>
+          </div>
+        </div>
+
+        <div class="side">
+          <div class="side-label">RESIDENT VIEW</div>
+          <div class="side-title">住戶看到的是單一路徑與低自由度</div>
+
+          <div class="item">
+            <div class="item-head">進站方式</div>
+            <div class="item-good">優點：透過分享連結可直接進流程。</div>
+            <div class="item-pain">痛點：若參數遺失或錯貼，住戶無替代入口。</div>
+          </div>
+
+          <div class="item">
+            <div class="item-head">預約體驗</div>
+            <div class="item-good">優點：流程短、步驟固定，驗證降低誤預約。</div>
+            <div class="item-pain">痛點：自由度低，提示不足會增加客服負擔。</div>
+          </div>
+
+          <div class="item">
+            <div class="item-head">時段可理解性</div>
+            <div class="item-good">優點：可用時段已預先篩過，住戶通常看不到不適合的時段。</div>
+            <div class="item-pain">痛點：需更好說明為何無法預約某些時段。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">開發者角度的判讀是：這套系統 <span class="accent">適合做營運控管，不適合做過度開放的自助平台</span>。其強項是降低錯誤與保留歷程，弱項是需更成熟的提示與報表以支撐規模化使用。</div>
+  </div>
+</body>
+</html>

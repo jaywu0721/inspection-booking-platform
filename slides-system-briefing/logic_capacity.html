@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>核心邏輯二：容量控制不只看前端</title>
+  <style>
+    body { margin: 0; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; }
+    .slide-container {
+      width: 1280px;
+      min-height: 720px;
+      box-sizing: border-box;
+      background: linear-gradient(135deg, #0E2433 0%, #132F43 60%, #193748 100%);
+      color: #F5F7FA;
+      position: relative;
+      overflow: hidden;
+    }
+    .grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(215,224,232,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(215,224,232,0.06) 1px, transparent 1px); background-size: 52px 52px; opacity: 0.24; }
+    .frame-line { position: absolute; left: 48px; right: 48px; top: 118px; height: 1px; background: linear-gradient(90deg, rgba(47,107,255,0.85), rgba(215,224,232,0.10)); z-index: 1; }
+    .content { position: relative; z-index: 2; padding-top: 42px; padding-left: 48px; padding-right: 48px; box-sizing: border-box; }
+    .eyebrow { font-size: 14px; letter-spacing: 1.5px; color: #8FB4FF; margin-bottom: 10px; }
+    h1 { margin: 0; font-size: 32px; font-weight: 800; }
+    .subtitle { margin-top: 10px; font-size: 18px; line-height: 1.6; color: #D7E0E8; width: 760px; }
+    .main {
+      display: grid;
+      grid-template-columns: 520px 1fr;
+      column-gap: 24px;
+      padding-top: 16px;
+      align-items: start;
+    }
+    .visual {
+      border: 1px solid rgba(215,224,232,0.16);
+      background: rgba(255,255,255,0.03);
+      box-sizing: border-box;
+      min-height: 316px; /* reduced from 360 to save vertical space */
+      padding-top: 6px; /* slightly reduced */
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    .visual-label { font-size: 13px; letter-spacing: 1.4px; color: #8FB4FF; margin-bottom: 10px; }
+    .visual img { width: 480px; height: 180px; object-fit: contain; display: block; border: 1px solid rgba(215,224,232,0.14); background: #ffffff; }
+    .visual-note { margin-top: 10px; font-size: 17px; line-height: 1.6; color: #D7E0E8; }
+    .visual-note strong { color: #F5F7FA; }
+    .logic-list { display: grid; grid-template-columns: 1fr; row-gap: 10px; }
+    .logic-item { border-top: 1px solid rgba(215,224,232,0.16); padding-top: 10px; min-height: 68px; box-sizing: border-box; }
+    .logic-index { font-size: 13px; color: #8FB4FF; letter-spacing: 1.2px; margin-bottom: 6px; }
+    .logic-title { font-size: 21px; font-weight: 700; margin-bottom: 6px; line-height: 1.4; }
+    .logic-text { font-size: 16px; line-height: 1.65; color: #D7E0E8; }
+    .matrix { display: grid; grid-template-columns: 198px 1fr; border-top: 1px solid rgba(215,224,232,0.16); border-left: 1px solid rgba(215,224,232,0.16); margin-top: 6px; /* reduced */ }
+    .cell { min-height: 36px; /* reduced from 44 */ border-right: 1px solid rgba(215,224,232,0.16); border-bottom: 1px solid rgba(215,224,232,0.16); box-sizing: border-box; padding-top: 4px; padding-left: 10px; padding-right: 10px; }
+    .cell.head { font-size: 13px; letter-spacing: 1.2px; color: #8FB4FF; }
+    .cell-title { font-size: 16px; font-weight: 700; line-height: 1.4; margin-bottom: 4px; color: #F5F7FA; }
+    .cell-text { font-size: 14px; line-height: 1.45; color: #D7E0E8; }
+    .bottom-note { margin-top: 8px; font-size: 15px; line-height: 1.6; color: #D7E0E8; }
+    .em { color: #8FB4FF; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="grid"></div>
+    <div class="frame-line"></div>
+    <div class="content">
+      <div class="eyebrow">CAPACITY CONTROL</div>
+      <h1>核心邏輯二：容量控制不只看前端</h1>
+      <div class="subtitle">真正的風險不在於列表有沒有顯示餘額，而在於 <span class="em">前端顯示、管理員改期與後端提交</span> 是否使用同一套名額規則。這一頁要講的是：系統已從「看起來有餘額」改成「前後一致地驗證餘額」。</div>
+      <div class="main">
+        <div>
+          <div class="visual">
+            <div class="visual-label">ADMIN RESCHEDULE VIEW</div>
+            <img src="/home/ubuntu/upload/pasted_file_V2mLQR_image.png" alt="後台改期時段與餘額顯示畫面" />
+            <div class="visual-note"><strong>實際介面證據：</strong> 管理員在編輯改期時，會看到「新時段 / 餘額」的清單。這個數字不再只是靜態文字，而是會隨日期變更與下拉展開動作重新同步。</div>
+          </div>
+          <div class="matrix" style="margin-top:12px;">
+            <div class="cell head">場景</div>
+            <div class="cell head">系統行為</div>
+            <div class="cell"><div class="cell-title">住戶查看可預約時段</div></div>
+            <div class="cell"><div class="cell-text">依 capacity 扣除有效預約數量後，計算剩餘名額。</div></div>
+            <div class="cell"><div class="cell-title">管理員改期選新日期</div></div>
+            <div class="cell"><div class="cell-text">立即同步該日期的時段與餘額，避免舊 state 殘留。</div></div>
+            <div class="cell"><div class="cell-title">下拉中看到額滿時段</div></div>
+            <div class="cell"><div class="cell-text">保留顯示，但不可選，讓額滿資訊可見而不是被隱藏。</div></div>
+            <div class="cell"><div class="cell-title">確認改期送出</div></div>
+            <div class="cell"><div class="cell-text">後端再次驗證名額，確保不因前端快取或多人同時操作而超賣。</div></div>
+          </div>
+        </div>
+        <div>
+          <div class="logic-list">
+            <div class="logic-item">
+              <div class="logic-index">STEP 01</div>
+              <div class="logic-title">選新日期後，先重抓該日期的時段餘額</div>
+              <div class="logic-text">管理員一旦切換日期，系統就會重新查詢該日期可用時段，而不是沿用上一個日期的舊資料，避免改期清單看起來正確、實際卻已失真。</div>
+            </div>
+            <div class="logic-item">
+              <div class="logic-index">STEP 02</div>
+              <div class="logic-title">展開新時段下拉時，再抓一次最新名額</div>
+              <div class="logic-text">額滿時段仍會顯示，但會標示餘額 0 並禁止選取。這樣做的目的不是隱藏問題，而是讓使用者清楚看到哪些時段存在、哪些時段已無法再分配。</div>
+            </div>
+            <div class="logic-item">
+              <div class="logic-index">STEP 03</div>
+              <div class="logic-title">送出改期時，後端還要再驗一次</div>
+              <div class="logic-text">前端畫面只是輔助決策，真正決定能不能改期的是送出當下的後端驗證。即使使用者看到有名額，若送出瞬間已被占用，系統仍會阻擋超額改期。</div>
+            </div>
+          </div>
+          <div class="bottom-note">開發者角度的結論是：這套設計已經比單純前端顯示進步很多，但若未來預約量再放大，仍建議持續補強更完整的併發保護與操作結果提示。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

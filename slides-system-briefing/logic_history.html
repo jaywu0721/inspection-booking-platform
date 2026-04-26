@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>核心邏輯三：系統偏向保留歷程</title>
+  <style>
+    body { margin: 0; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; }
+    .slide-container {
+      width: 1280px;
+      min-height: 720px;
+      box-sizing: border-box;
+      background: linear-gradient(135deg, #0E2433 0%, #143245 58%, #1B394A 100%);
+      color: #F5F7FA;
+      position: relative;
+      overflow: hidden;
+    }
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(215,224,232,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(215,224,232,0.06) 1px, transparent 1px);
+      background-size: 52px 52px;
+      opacity: 0.24;
+    }
+    .content {
+      position: relative;
+      z-index: 2;
+      padding-top: 40px;
+      padding-left: 50px;
+      padding-right: 50px;
+      box-sizing: border-box;
+    }
+    .topline {
+      width: 176px;
+      height: 4px;
+      background: #2F6BFF;
+      margin-bottom: 16px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    .subtitle {
+      margin-top: 12px;
+      width: 930px;
+      font-size: 17px;
+      line-height: 1.65;
+      color: #D7E0E8;
+    }
+    .main {
+      display: grid;
+      grid-template-columns: 430px 1fr;
+      column-gap: 28px;
+      padding-top: 24px;
+      align-items: start;
+    }
+    .timeline-panel {
+      min-height: 500px;
+      border-top: 1px solid rgba(215,224,232,0.18);
+      box-sizing: border-box;
+      padding-top: 18px;
+      position: relative;
+    }
+    .axis {
+      position: absolute;
+      left: 12px;
+      top: 88px;
+      width: 1px;
+      height: 338px;
+      background: linear-gradient(180deg, rgba(47,107,255,0.95), rgba(215,224,232,0.18));
+    }
+    .kicker {
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: #8FB4FF;
+      margin-bottom: 12px;
+    }
+    .hero {
+      font-size: 28px;
+      line-height: 1.4;
+      font-weight: 700;
+      margin-bottom: 16px;
+      width: 360px;
+    }
+    .hero .accent { color: #8FB4FF; }
+    .timeline-item {
+      position: relative;
+      padding-left: 38px;
+      margin-bottom: 22px;
+      min-height: 92px;
+      box-sizing: border-box;
+    }
+    .dot {
+      position: absolute;
+      left: 3px;
+      top: 6px;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #2F6BFF;
+      background: #102B3B;
+      box-sizing: border-box;
+    }
+    .item-title {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.35;
+      margin-bottom: 6px;
+    }
+    .item-text {
+      font-size: 15px;
+      line-height: 1.62;
+      color: #D7E0E8;
+      width: 350px;
+    }
+    .matrix {
+      display: grid;
+      grid-template-columns: 180px 210px 1fr;
+      border-top: 1px solid rgba(215,224,232,0.18);
+      border-left: 1px solid rgba(215,224,232,0.18);
+    }
+    .cell {
+      min-height: 72px;
+      border-right: 1px solid rgba(215,224,232,0.18);
+      border-bottom: 1px solid rgba(215,224,232,0.18);
+      box-sizing: border-box;
+      padding-top: 12px;
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    .head {
+      font-size: 13px;
+      color: #8FB4FF;
+      letter-spacing: 1px;
+    }
+    .cell-title {
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1.35;
+      margin-bottom: 4px;
+    }
+    .cell-text {
+      font-size: 14px;
+      line-height: 1.55;
+      color: #D7E0E8;
+    }
+    .side-note {
+      margin-top: 14px;
+      border-top: 1px solid rgba(47,107,255,0.36);
+      padding-top: 12px;
+      font-size: 16px;
+      line-height: 1.68;
+      color: #D7E0E8;
+    }
+    .footer-note {
+      margin-top: 2px; /* reduced from 14px to pull footer under 720px */
+      width: 1120px;
+      font-size: 15px;
+      line-height: 1.65;
+      color: #D7E0E8;
+    }
+    .highlight { color: #8FB4FF; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="grid"></div>
+    <div class="content">
+      <div class="topline"></div>
+      <h1>核心邏輯三：系統偏向保留歷程</h1>
+      <div class="subtitle">這套系統在資料處理上的立場很明確：<span class="highlight">只要某筆資料已經進入正式營運脈絡，就不鼓勵直接刪除</span>。它追求的不是刪得快，而是讓後續查詢、交接與責任釐清有依據。</div>
+
+      <div class="main">
+        <div class="timeline-panel">
+          <div class="kicker">RECORD RETENTION STRATEGY</div>
+          <div class="hero">系統不是把資料堆起來，而是把<span class="accent">歷程保留下來</span>。</div>
+          <div class="axis"></div>
+
+          <div class="timeline-item">
+            <div class="dot"></div>
+            <div class="item-title">住戶資料：有預約就不能直接刪</div>
+            <div class="item-text">一旦住戶已經產生預約紀錄，系統就不允許直接移除這筆住戶資料，避免後面查不到這筆預約最初是誰建立的。</div>
+          </div>
+
+          <div class="timeline-item">
+            <div class="dot"></div>
+            <div class="item-title">時段資料：已被預約就不能任意清掉</div>
+            <div class="item-text">只要某個時段已經被正式預約使用，系統就會阻擋直接刪除，避免既有預約失去對應時段，讓歷程斷裂。</div>
+          </div>
+
+          <div class="timeline-item" style="margin-bottom:0;">
+            <div class="dot"></div>
+            <div class="item-title">改期資料：保留舊時段、新時段與備註</div>
+            <div class="item-text">改期不是覆寫掉原本資料，而是額外留下變更紀錄，包含從哪個時段改到哪個時段、何時改、為什麼改。</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="matrix">
+            <div class="cell"><div class="head">資料對象</div></div>
+            <div class="cell"><div class="head">系統限制</div></div>
+            <div class="cell"><div class="head">營運意義</div></div>
+
+            <div class="cell"><div class="cell-title">住戶</div></div>
+            <div class="cell"><div class="cell-title">已有預約紀錄時不能直接刪除</div></div>
+            <div class="cell"><div class="cell-text">保留身分與預約的對應脈絡，避免後續查詢找不到來源。</div></div>
+
+            <div class="cell"><div class="cell-title">時段</div></div>
+            <div class="cell"><div class="cell-title">已有使用紀錄時不能直接刪除</div></div>
+            <div class="cell"><div class="cell-text">確保歷史預約仍能對應到當時的時段與容量設定。</div></div>
+
+            <div class="cell"><div class="cell-title">改期</div></div>
+            <div class="cell"><div class="cell-title">改期會新增歷程，而非只覆寫結果</div></div>
+            <div class="cell"><div class="cell-text">方便追查誰調整過時段、改了什麼、是否留下備註與責任脈絡。</div></div>
+
+            <div class="cell"><div class="cell-title">預約狀態</div></div>
+            <div class="cell"><div class="cell-title">用 booked / rescheduled / cancelled 區分</div></div>
+            <div class="cell"><div class="cell-text">讓預約不是只有「有或沒有」，而是能看出完整生命週期。</div></div>
+          </div>
+
+          <div class="side-note">這種設計對營運稽核是加分，因為它比較接近<span class="highlight">留痕管理</span>；但代價是後台資料會越來越多，因此搜尋、篩選與歷程閱讀介面要持續補強，否則紀錄保留越完整，日後反而越難讀。</div>
+        </div>
+      </div>
+
+      <div class="footer-note">站在公司管理角度看，這套系統偏向「保留脈絡、方便追查」；站在操作角度看，代表不能把正式資料當成可隨手清掉的暫存資料。</div>
+    </div>
+  </div>
+</body>
+</html>

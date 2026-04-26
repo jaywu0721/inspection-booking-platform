@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>驗屋預約管理系統｜公司介紹與開發者測評</title>
+  <style>
+    body { margin: 0; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; }
+    .slide-container {
+      width: 1280px;
+      min-height: 720px;
+      box-sizing: border-box;
+      background: radial-gradient(circle at 78% 20%, rgba(47,107,255,0.18), transparent 24%), linear-gradient(135deg, #0E2433 0%, #143245 58%, #223746 100%);
+      color: #F5F7FA;
+      position: relative;
+      overflow: hidden;
+    }
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(215,224,232,0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(215,224,232,0.08) 1px, transparent 1px);
+      background-size: 54px 54px;
+      opacity: 0.28;
+    }
+    .frame {
+      position: absolute;
+      inset: 28px;
+      border: 1px solid rgba(215,224,232,0.18);
+    }
+    .content {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      column-gap: 30px;
+      min-height: 720px;
+      padding-top: 72px;
+      padding-left: 62px;
+      padding-right: 62px;
+      box-sizing: border-box;
+      position: relative;
+      z-index: 2;
+    }
+    .eyebrow {
+      display: inline-block;
+      font-size: 16px;
+      letter-spacing: 2px;
+      color: #D7E0E8;
+      border: 1px solid rgba(215,224,232,0.24);
+      padding: 8px 14px;
+      background: rgba(255,255,255,0.05);
+      margin-bottom: 28px;
+    }
+    h1 {
+      font-size: 66px;
+      line-height: 1.12;
+      font-weight: 800;
+      width: 640px;
+      margin: 0 0 20px 0;
+    }
+    .subtitle {
+      font-size: 28px;
+      color: #D7E0E8;
+      margin-bottom: 28px;
+    }
+    .summary {
+      font-size: 22px;
+      line-height: 1.8;
+      width: 690px;
+      color: #D7E0E8;
+    }
+    .accent-line {
+      width: 170px;
+      height: 6px;
+      background: linear-gradient(90deg, #2F6BFF, rgba(47,107,255,0.15));
+      margin-top: 36px;
+    }
+    .right-panel {
+      width: 430px;
+      min-height: 520px;
+      margin-left: auto;
+      border: 1px solid rgba(215,224,232,0.18);
+      background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06));
+      backdrop-filter: blur(8px);
+      box-sizing: border-box;
+      padding-top: 42px;
+      padding-left: 34px;
+      padding-right: 34px;
+    }
+    .panel-title {
+      font-size: 15px;
+      letter-spacing: 2px;
+      color: #7FA7FF;
+      margin-bottom: 26px;
+    }
+    .panel-block {
+      border-top: 1px solid rgba(215,224,232,0.16);
+      padding-top: 20px;
+      margin-top: 20px;
+    }
+    .panel-label {
+      font-size: 14px;
+      color: #8FB4FF;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+    .panel-text {
+      font-size: 24px;
+      line-height: 1.5;
+      color: #F5F7FA;
+    }
+    .panel-note {
+      font-size: 17px;
+      line-height: 1.7;
+      color: #D7E0E8;
+      margin-top: 10px;
+    }
+    .footer {
+      position: absolute;
+      left: 62px;
+      right: 62px;
+      top: 642px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      color: rgba(215,224,232,0.78);
+      z-index: 2;
+    }
+    .footer-line {
+      position: absolute;
+      left: 62px;
+      right: 62px;
+      top: 624px;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(47,107,255,0.7), rgba(215,224,232,0.08));
+      z-index: 2;
+    }
+    .glow-box {
+      position: absolute;
+      right: 80px;
+      top: 64px;
+      width: 210px;
+      height: 210px;
+      border: 1px solid rgba(47,107,255,0.24);
+      box-shadow: 0 0 80px rgba(47,107,255,0.16);
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="grid"></div>
+    <div class="frame"></div>
+    <div class="glow-box"></div>
+    <div class="content">
+      <div>
+        <div class="eyebrow">DEVELOPER BRIEFING</div>
+        <h1>驗屋預約管理系統</h1>
+        <div class="subtitle">公司介紹與開發者測評簡報</div>
+        <div class="summary">從正式分享連結、住戶驗證、時段容量控管，到改期歷程與資料保護，說明這套系統如何作為驗屋預約的營運中台。</div>
+        <div class="accent-line"></div>
+      </div>
+      <div class="right-panel">
+        <div class="panel-title">PRESENTATION SCOPE</div>
+        <div class="panel-block" style="margin-top:0;">
+          <div class="panel-label">簡報視角</div>
+          <div class="panel-text">公司介紹 + 開發者測評</div>
+          <div class="panel-note">不是單純操作手冊，而是協助決策者與內部人員理解系統價值、限制與下一步。</div>
+        </div>
+        <div class="panel-block">
+          <div class="panel-label">主要聽眾</div>
+          <div class="panel-text">決策者、行政客服、營運與開發團隊</div>
+        </div>
+        <div class="panel-block">
+          <div class="panel-label">系統範圍</div>
+          <div class="panel-text">管理入口、分享連結、住戶預約、時段控管、改期歷程、資料保護</div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-line"></div>
+    <div class="footer">
+      <div>inspection-booking-platform</div>
+      <div>Developer-facing company briefing</div>
+    </div>
+  </div>
+</body>
+</html>
