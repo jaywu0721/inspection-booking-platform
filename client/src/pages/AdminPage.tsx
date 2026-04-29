@@ -9,6 +9,7 @@ import { buildCompanyFormFromRecord, createEmptyCompanyForm } from "@/lib/compan
 import { useRescheduleAvailabilitySync } from "@/hooks/useRescheduleAvailabilitySync";
 import { trpc } from "@/lib/trpc";
 import { AdminRescheduleFields } from "@/components/AdminRescheduleFields";
+import { AdminBookingRecordsTable } from "@/components/AdminBookingRecordsTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -851,10 +852,24 @@ export default function AdminPage() {
                 <Card>
                   <CardHeader><CardTitle>預約紀錄</CardTitle></CardHeader>
                   <CardContent className="overflow-x-auto">
-                    <Table>
-                      <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>公司 / 建案</TableHead><TableHead>戶號</TableHead><TableHead>類型</TableHead><TableHead>時段</TableHead><TableHead>狀態</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
-                      <TableBody>{bookings.map(booking => <React.Fragment key={booking.id}><TableRow><TableCell>{booking.id}</TableCell><TableCell>{booking.companyName} / {booking.projectName}</TableCell><TableCell>{booking.unitNumberSnapshot}</TableCell><TableCell>{booking.bookingType}</TableCell><TableCell>{formatDateOnly(booking.slotDate)} {booking.startLabel}-{booking.endLabel}</TableCell><TableCell>{booking.status}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => startEditingBooking(booking)}>{rescheduleForm.bookingId === String(booking.id) ? "編輯中" : "編輯改期"}</Button></TableCell></TableRow>{rescheduleForm.bookingId === String(booking.id) ? <TableRow><TableCell colSpan={7} className="bg-muted/20"><AdminRescheduleFields slotDate={rescheduleForm.slotDate} newSlotId={rescheduleForm.newSlotId} note={rescheduleForm.note} dateOptions={rescheduleDateOptions} slotOptions={rescheduleSlotOptions} isFetching={rescheduleAvailabilityQuery.isFetching} errorMessage={rescheduleAvailabilityQuery.error?.message} isSubmitting={rescheduleMutation.isPending} onChangeDate={nextDate => setRescheduleForm(current => ({ ...current, slotDate: nextDate, newSlotId: "" }))} onChangeSlot={newSlotId => setRescheduleForm(current => ({ ...current, newSlotId }))} onChangeNote={note => setRescheduleForm(current => ({ ...current, note }))} onSyncAvailability={syncRescheduleAvailability} onSubmit={submitReschedule} onCancel={cancelEditingBooking} /></TableCell></TableRow> : null}</React.Fragment>)}</TableBody>
-                    </Table>
+                      <AdminBookingRecordsTable
+                      bookings={bookings}
+                      editingBookingId={rescheduleForm.bookingId}
+                      rescheduleForm={rescheduleForm}
+                      dateOptions={rescheduleDateOptions}
+                      slotOptions={rescheduleSlotOptions}
+                      isFetching={rescheduleAvailabilityQuery.isFetching}
+                      errorMessage={rescheduleAvailabilityQuery.error?.message}
+                      isSubmitting={rescheduleMutation.isPending}
+                      onStartEditing={startEditingBooking}
+                      onChangeDate={nextDate => setRescheduleForm(current => ({ ...current, slotDate: nextDate, newSlotId: "" }))}
+                      onChangeSlot={newSlotId => setRescheduleForm(current => ({ ...current, newSlotId }))}
+                      onChangeNote={note => setRescheduleForm(current => ({ ...current, note }))}
+                      onSyncAvailability={syncRescheduleAvailability}
+                      onSubmit={submitReschedule}
+                      onCancel={cancelEditingBooking}
+                    />
+
                   </CardContent>
                 </Card>
               </TabsContent>
