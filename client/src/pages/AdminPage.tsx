@@ -3,7 +3,7 @@ import { redirectToAdminDashboardAfterLogin } from "@/lib/adminRedirect";
 import { DEFAULT_SLOT_PRESETS, createProjectSlug } from "@/lib/adminConfig";
 import { buildBookingLinkUrlMap, filterResidentsByProject } from "@/lib/adminDashboard";
 import { getProjectsForCompany, parsePositiveId, validateResidentForm } from "@/lib/adminForms";
-import { buildPresetSlotPayloads, createEditableSlotPresets, filterSlotsByLink, getLinksForProject, validateSingleSlotForm } from "@/lib/slotForms";
+import { buildPresetSlotPayloads, createEditableSlotPresets, createEmptySlotForm, filterSlotsByLink, getLinksForProject, validateSingleSlotForm } from "@/lib/slotForms";
 import { validateBookingLinkForm } from "@/lib/linkForm";
 import { buildCompanyFormFromRecord, createEmptyCompanyForm } from "@/lib/companyEditor";
 import { useRescheduleAvailabilitySync } from "@/hooks/useRescheduleAvailabilitySync";
@@ -68,7 +68,6 @@ function createEmptyLinkForm() {
     isEnabled: true,
     startsAt: "",
     endsAt: "",
-    disabledReason: "",
   };
 }
 
@@ -76,6 +75,7 @@ export default function AdminPage() {
 
   const utils = trpc.useUtils();
   const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const [activeTab, setActiveTab] = useState("companies");
   const [companyForm, setCompanyForm] = useState(createEmptyCompanyForm());
   const [projectForm, setProjectForm] = useState({
     companyId: "",
@@ -92,17 +92,7 @@ export default function AdminPage() {
     note: "",
   });
   const [linkForm, setLinkForm] = useState(createEmptyLinkForm());
-  const [slotForm, setSlotForm] = useState({
-    id: "",
-    companyId: "",
-    projectId: "",
-    linkId: "",
-    slotDate: "",
-    startLabel: "09:00",
-    endLabel: "10:30",
-    capacity: "1",
-    isActive: true,
-  });
+  const [slotForm, setSlotForm] = useState(createEmptySlotForm());
   const [selectedSlotLinkId, setSelectedSlotLinkId] = useState("");
   const [editableSlotPresets, setEditableSlotPresets] = useState(createEditableSlotPresets());
   const [bookingFilters, setBookingFilters] = useState({ projectId: "", linkId: "", unitNumber: "", bookingType: "all", status: "all", bookingDate: "" });
@@ -214,7 +204,7 @@ export default function AdminPage() {
       toast.success("時段已儲存");
       await refreshAll();
       setEditableSlotPresets(createEditableSlotPresets());
-      setSlotForm({ id: "", companyId: "", projectId: "", linkId: "", slotDate: "", startLabel: "09:00", endLabel: "10:30", capacity: "1", isActive: true });
+      setSlotForm(createEmptySlotForm());
     },
     onError: error => toast.error(error.message),
   });
@@ -223,7 +213,7 @@ export default function AdminPage() {
     onSuccess: async () => {
       toast.success("時段紀錄已刪除");
       setDeleteTarget(null);
-      setSlotForm({ id: "", companyId: "", projectId: "", linkId: "", slotDate: "", startLabel: "09:00", endLabel: "10:30", capacity: "1", isActive: true });
+      setSlotForm(createEmptySlotForm());
       await refreshAll();
     },
     onError: error => toast.error(error.message),
@@ -349,7 +339,6 @@ export default function AdminPage() {
       isEnabled: link.isEnabled,
       startsAt: formatDateTimeInput(link.startsAt),
       endsAt: formatDateTimeInput(link.endsAt),
-      disabledReason: link.disabledReason || "",
     });
   };
 
@@ -358,22 +347,30 @@ export default function AdminPage() {
   };
 
   const startEditingSlot = (slot: typeof slots[number]) => {
+    setActiveTab("schedule");
     setSlotForm({
       id: String(slot.id),
       companyId: String(slot.companyId),
       projectId: String(slot.projectId),
       linkId: String(slot.linkId ?? ""),
       slotDate: new Date(slot.slotDate).toISOString().slice(0, 10),
+      rangeStartDate: "",
+      rangeEndDate: "",
+      dateMode: "single",
       startLabel: slot.startLabel,
       endLabel: slot.endLabel,
       capacity: String(slot.capacity),
       isActive: slot.isActive,
     });
     setSelectedSlotLinkId(String(slot.linkId ?? ""));
+    toast.success("已帶入該時段資料，請直接在上方時段管理區編輯");
+    window.setTimeout(() => {
+      document.getElementById("slot-management-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   };
 
   const cancelEditingSlot = () => {
-    setSlotForm({ id: "", companyId: "", projectId: "", linkId: "", slotDate: "", startLabel: "09:00", endLabel: "10:30", capacity: "1", isActive: true });
+    setSlotForm(createEmptySlotForm());
   };
 
   const startEditingBooking = (booking: typeof bookings[number]) => {
@@ -441,6 +438,9 @@ export default function AdminPage() {
       {
         linkId: slotForm.linkId,
         slotDate: slotForm.slotDate,
+        rangeStartDate: slotForm.rangeStartDate,
+        rangeEndDate: slotForm.rangeEndDate,
+        dateMode: slotForm.dateMode,
         capacity: slotForm.capacity,
         isActive: slotForm.isActive,
       },
@@ -452,14 +452,18 @@ export default function AdminPage() {
       return;
     }
 
-    const sameDateSlots = filterSlotsByLink(slots, slotForm.linkId).filter(
-      slot => new Date(slot.slotDate).toISOString().slice(0, 10) === slotForm.slotDate
+    const filteredLinkSlots = filterSlotsByLink(slots, slotForm.linkId);
+    const duplicatePayload = validation.payloads.find(payload =>
+      filteredLinkSlots.some(slot => {
+        const slotDate = new Date(slot.slotDate).toISOString().slice(0, 10);
+        const payloadDate = new Date(payload.slotDate).toISOString().slice(0, 10);
+        return slotDate === payloadDate && slot.startLabel === payload.startLabel && slot.endLabel === payload.endLabel;
+      })
     );
-    const existingKeys = new Set(sameDateSlots.map(slot => `${slot.startLabel}-${slot.endLabel}`));
-    const duplicatePayload = validation.payloads.find(payload => existingKeys.has(`${payload.startLabel}-${payload.endLabel}`));
 
     if (duplicatePayload) {
-      toast.error(`此預約連結在 ${slotForm.slotDate} 的 ${duplicatePayload.startLabel}-${duplicatePayload.endLabel} 已存在，請先調整後再建立`);
+      const duplicateDate = new Date(duplicatePayload.slotDate).toISOString().slice(0, 10);
+      toast.error(`此預約連結在 ${duplicateDate} 的 ${duplicatePayload.startLabel}-${duplicatePayload.endLabel} 已存在，請先調整後再建立`);
       return;
     }
 
@@ -474,6 +478,11 @@ export default function AdminPage() {
   };
 
   const saveSlot = () => {
+    if (slotForm.dateMode === "range" && !slotForm.id) {
+      toast.error("日期區間模式只支援一鍵建立預設時段；若要單筆建立，請切回單一日期")
+      return;
+    }
+
     const validation = validateSingleSlotForm(slotForm);
     if (!validation.ok) {
       toast.error(validation.message);
@@ -635,7 +644,7 @@ export default function AdminPage() {
           </Card>
 
           <div className="lg:col-span-3">
-            <Tabs defaultValue="companies" className="space-y-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
               <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="companies">公司</TabsTrigger>
                 <TabsTrigger value="projects">建案</TabsTrigger>
@@ -772,7 +781,6 @@ export default function AdminPage() {
                     <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={linkForm.companyId} onChange={event => setLinkForm(current => ({ ...current, companyId: event.target.value, projectId: "" }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={linkForm.projectId} onChange={event => setLinkForm(current => ({ ...current, projectId: event.target.value }))} disabled={!linkForm.companyId}><option value="">{linkForm.companyId ? "請選擇" : "請先選公司"}</option>{linkProjectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>類型</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={linkForm.type} onChange={event => setLinkForm(current => ({ ...current, type: event.target.value }))}><option value="initial">初驗</option><option value="reinspect">複驗</option></select></div>
-                    <div className="space-y-2"><Label>停用原因</Label><Input value={linkForm.disabledReason} onChange={event => setLinkForm(current => ({ ...current, disabledReason: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>開始時間</Label><Input type="datetime-local" value={linkForm.startsAt} onChange={event => setLinkForm(current => ({ ...current, startsAt: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>結束時間</Label><Input type="datetime-local" value={linkForm.endsAt} onChange={event => setLinkForm(current => ({ ...current, endsAt: event.target.value }))} /></div>
                     <div className="flex items-center gap-3 md:col-span-2"><input type="checkbox" checked={linkForm.isEnabled} onChange={event => setLinkForm(current => ({ ...current, isEnabled: event.target.checked }))} /><span className="text-sm text-muted-foreground">目前啟用</span></div>
@@ -780,14 +788,16 @@ export default function AdminPage() {
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card id="slot-management-card">
                   <CardHeader><CardTitle>時段管理</CardTitle><CardDescription>這裡的原則很單純：時段必須掛在明確的預約連結下，不能再用共用池混著放，不然後面只會把舊時段誤帶到新連結。</CardDescription></CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.companyId} onChange={event => setSlotForm(current => ({ ...current, id: "", companyId: event.target.value, projectId: "", linkId: "" }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.projectId} onChange={event => setSlotForm(current => ({ ...current, id: "", projectId: event.target.value, linkId: "" }))} disabled={!slotForm.companyId}><option value="">{slotForm.companyId ? "請選擇" : "請先選公司"}</option>{slotProjectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>預約連結</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.linkId} onChange={event => { const nextLinkId = event.target.value; setSlotForm(current => ({ ...current, id: current.id, linkId: nextLinkId })); setSelectedSlotLinkId(nextLinkId); }} disabled={!slotForm.projectId}><option value="">{slotForm.projectId ? "請選擇" : "請先選建案"}</option>{slotLinkOptions.map(link => <option key={link.id} value={link.id}>{`${link.type} / #${link.id}${link.isEnabled ? "" : "（已停用）"}`}</option>)}</select></div>
-                    <div className="space-y-2"><Label>日期</Label><Input type="date" value={slotForm.slotDate} onChange={event => setSlotForm(current => ({ ...current, slotDate: event.target.value }))} /></div>
-                    <div className="space-y-2"><Label>名額</Label><Input type="number" min="1" value={slotForm.capacity} onChange={event => setSlotForm(current => ({ ...current, capacity: event.target.value }))} /></div>
+                    <div className="space-y-2"><Label>日期模式</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.dateMode} onChange={event => setSlotForm(current => ({ ...current, id: current.id ? current.id : "", dateMode: event.target.value as "single" | "range", slotDate: "", rangeStartDate: "", rangeEndDate: "" }))} disabled={Boolean(slotForm.id)}><option value="single">單一日期選擇</option><option value="range">日期區間選擇</option></select></div>
+                    {slotForm.dateMode === "range" && !slotForm.id ? <div className="space-y-2"><Label>區間開始</Label><Input type="date" value={slotForm.rangeStartDate} onChange={event => setSlotForm(current => ({ ...current, rangeStartDate: event.target.value }))} /></div> : <div className="space-y-2"><Label>日期</Label><Input type="date" value={slotForm.slotDate} onChange={event => setSlotForm(current => ({ ...current, slotDate: event.target.value }))} /></div>}
+                    {slotForm.dateMode === "range" && !slotForm.id ? <div className="space-y-2"><Label>區間結束</Label><Input type="date" value={slotForm.rangeEndDate} onChange={event => setSlotForm(current => ({ ...current, rangeEndDate: event.target.value }))} /></div> : <div className="space-y-2"><Label>名額</Label><Input type="number" min="1" value={slotForm.capacity} onChange={event => setSlotForm(current => ({ ...current, capacity: event.target.value }))} /></div>}
+                    {slotForm.dateMode === "range" && !slotForm.id ? <div className="space-y-2"><Label>名額</Label><Input type="number" min="1" value={slotForm.capacity} onChange={event => setSlotForm(current => ({ ...current, capacity: event.target.value }))} /></div> : null}
                     <div className="space-y-2"><Label>開始</Label><Input value={slotForm.startLabel} onChange={event => setSlotForm(current => ({ ...current, startLabel: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>結束</Label><Input value={slotForm.endLabel} onChange={event => setSlotForm(current => ({ ...current, endLabel: event.target.value }))} /></div>
                     <div className="flex items-center gap-3 md:col-span-2"><input type="checkbox" checked={slotForm.isActive} onChange={event => setSlotForm(current => ({ ...current, isActive: event.target.checked }))} /><span className="text-sm text-muted-foreground">啟用時段</span></div>
@@ -796,7 +806,7 @@ export default function AdminPage() {
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div>
                           <p className="text-sm font-medium">快速建立常用時段</p>
-                          <p className="mt-2 text-sm text-muted-foreground">先選預約連結、日期與名額，再建立四筆常用時段。你如果連連結都沒選就批量建立，資料只會再次混亂。</p>
+                          <p className="mt-2 text-sm text-muted-foreground">單一日期模式會建立一天的四筆常用時段；日期區間模式則會直接把同一組預設時段套用到區間內每一天。這樣做的風險是如果你沒先確認日期區間，就會一次建立很多筆，所以區間起訖一定要先看清楚。</p>
                         </div>
                         <Button type="button" variant="outline" size="sm" onClick={resetEditableSlotPresets}>重設本次預設</Button>
                       </div>
@@ -811,8 +821,11 @@ export default function AdminPage() {
                           </div>
                         ))}
                       </div>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <Button type="button" size="sm" onClick={createPresetSlots} disabled={slotMutation.isPending}>一鍵建立預設時段</Button>
+                      <div className="mt-4 space-y-2">
+                        {slotForm.dateMode === "range" && !slotForm.id ? <p className="text-sm text-muted-foreground">你現在使用的是日期區間模式。選好開始與結束日期後，直接按下方按鈕，系統會對區間內每一天建立同一組預設時段。</p> : null}
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" size="sm" onClick={createPresetSlots} disabled={slotMutation.isPending}>一鍵建立預設時段</Button>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -831,7 +844,7 @@ export default function AdminPage() {
                       </div>
                     </div>
                     <div className="overflow-x-auto">
-                      <Table><TableHeader><TableRow><TableHead>建案</TableHead><TableHead>類型</TableHead><TableHead>狀態</TableHead><TableHead>分享網址</TableHead><TableHead>停用原因</TableHead><TableHead>啟用期間</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{links.map(link => { const bookingUrl = bookingLinkUrlById.get(link.id) ?? null; return <TableRow key={link.id}><TableCell>{projectNameById.get(link.projectId) || `建案 ${link.projectId}`}</TableCell><TableCell>{link.type} / #{link.id}</TableCell><TableCell><Badge variant={link.isEnabled ? "outline" : "secondary"}>{link.isEnabled ? "啟用中" : "已停止"}</Badge></TableCell><TableCell className="min-w-[260px]"><div className="space-y-2"><p className="break-all text-xs text-muted-foreground">{bookingUrl || "缺少 share token，暫時無法產生連結"}</p>{bookingUrl ? <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => copyBookingLink(bookingUrl)}><Copy className="h-4 w-4" />複製</Button><Button asChild variant="outline" size="sm"><a href={bookingUrl} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />開啟</a></Button></div> : null}</div></TableCell><TableCell>{link.disabledReason || "-"}</TableCell><TableCell>{formatDateTime(link.startsAt)} ~ {formatDateTime(link.endsAt)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingLink(link)}>編輯</Button><Button variant="outline" size="sm" onClick={() => toggleLinkEnabledMutation.mutate({ id: link.id, isEnabled: !link.isEnabled, disabledReason: link.disabledReason || "此連結已由後台停止" })} disabled={toggleLinkEnabledMutation.isPending}>{link.isEnabled ? "停止" : "重新啟用"}</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "link", id: link.id, label: `${projectNameById.get(link.projectId) || `建案 ${link.projectId}`} / ${link.type} / #${link.id}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>; })}</TableBody></Table>
+                      <Table><TableHeader><TableRow><TableHead>建案</TableHead><TableHead>類型</TableHead><TableHead>狀態</TableHead><TableHead>分享網址</TableHead><TableHead>啟用期間</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{links.map(link => { const bookingUrl = bookingLinkUrlById.get(link.id) ?? null; return <TableRow key={link.id}><TableCell>{projectNameById.get(link.projectId) || `建案 ${link.projectId}`}</TableCell><TableCell>{link.type} / #{link.id}</TableCell><TableCell><Badge variant={link.isEnabled ? "outline" : "secondary"}>{link.isEnabled ? "啟用中" : "已停止"}</Badge></TableCell><TableCell className="min-w-[260px]"><div className="space-y-2"><p className="break-all text-xs text-muted-foreground">{bookingUrl || "缺少 share token，暫時無法產生連結"}</p>{bookingUrl ? <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => copyBookingLink(bookingUrl)}><Copy className="h-4 w-4" />複製</Button><Button asChild variant="outline" size="sm"><a href={bookingUrl} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />開啟</a></Button></div> : null}</div></TableCell><TableCell>{formatDateTime(link.startsAt)} ~ {formatDateTime(link.endsAt)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingLink(link)}>編輯</Button><Button variant="outline" size="sm" onClick={() => toggleLinkEnabledMutation.mutate({ id: link.id, isEnabled: !link.isEnabled, disabledReason: link.disabledReason || "此連結已由後台停止" })} disabled={toggleLinkEnabledMutation.isPending}>{link.isEnabled ? "停止" : "重新啟用"}</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "link", id: link.id, label: `${projectNameById.get(link.projectId) || `建案 ${link.projectId}`} / ${link.type} / #${link.id}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>; })}</TableBody></Table>
                     </div>
                     <div className="overflow-x-auto">
                       <Table><TableHeader><TableRow><TableHead>連結 ID</TableHead><TableHead>日期</TableHead><TableHead>時段</TableHead><TableHead>名額</TableHead><TableHead>狀態</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{filteredSlots.map(slot => <TableRow key={slot.id}><TableCell>{slot.linkId ?? "-"}</TableCell><TableCell>{formatDateOnly(slot.slotDate)}</TableCell><TableCell>{slot.startLabel} - {slot.endLabel}</TableCell><TableCell>{slot.capacity}</TableCell><TableCell>{slot.isActive ? "啟用" : "停用"}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingSlot(slot)}>編輯</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "slot", id: slot.id, label: `${formatDateOnly(slot.slotDate)} ${slot.startLabel}-${slot.endLabel}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>)}</TableBody></Table>

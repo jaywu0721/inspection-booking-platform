@@ -17,7 +17,6 @@ export type BookingLinkFormValue = {
   isEnabled: boolean;
   startsAt: string;
   endsAt: string;
-  disabledReason: string;
 };
 
 export function validateBookingLinkForm(form: BookingLinkFormValue) {
@@ -39,7 +38,7 @@ export function validateBookingLinkForm(form: BookingLinkFormValue) {
     isEnabled: form.isEnabled,
     startsAt: new Date(form.startsAt),
     endsAt: new Date(form.endsAt),
-    disabledReason: form.disabledReason,
+    disabledReason: "",
   };
 
   return {
