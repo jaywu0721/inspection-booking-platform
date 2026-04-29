@@ -468,6 +468,10 @@ export async function createBookingRecord(input: PublicSiteLinkInput & {
     throw new Error("住戶資料不存在");
   }
 
+  if (resident.projectId !== site.project.id || resident.companyId !== site.company.id) {
+    throw new Error("此住戶不屬於目前建案，不能使用這個預約連結");
+  }
+
   const [slot] = await db
     .select()
     .from(bookingSlots)
@@ -675,7 +679,23 @@ export async function deleteBookingLinkRecord(linkId: number) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
-  await db.delete(bookingLinks).where(eq(bookingLinks.id, linkId));
+  await db.transaction(async tx => {
+    const bookingRows = await tx
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(eq(bookings.linkId, linkId));
+
+    const bookingIds = bookingRows.map(row => row.id);
+
+    if (bookingIds.length > 0) {
+      await tx.delete(bookingReschedules).where(inArray(bookingReschedules.bookingId, bookingIds));
+      await tx.delete(bookings).where(inArray(bookings.id, bookingIds));
+    }
+
+    await tx.delete(bookingSlots).where(eq(bookingSlots.linkId, linkId));
+    await tx.delete(bookingLinks).where(eq(bookingLinks.id, linkId));
+  });
+
   return linkId;
 }
 
@@ -811,6 +831,7 @@ export async function upsertBookingSlotRecord(input: {
 
 export async function searchBookings(filters: {
   projectId?: number;
+  linkId?: number;
   unitNumber?: string;
   bookingType?: "initial" | "reinspect";
   status?: "booked" | "rescheduled" | "cancelled";
@@ -821,6 +842,7 @@ export async function searchBookings(filters: {
 
   const conditions = [];
   if (filters.projectId) conditions.push(eq(bookings.projectId, filters.projectId));
+  if (filters.linkId) conditions.push(eq(bookings.linkId, filters.linkId));
   if (filters.unitNumber) conditions.push(like(bookings.unitNumberSnapshot, `%${filters.unitNumber}%`));
   if (filters.bookingType) conditions.push(eq(bookings.bookingType, filters.bookingType));
   if (filters.status) conditions.push(eq(bookings.status, filters.status));

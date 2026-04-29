@@ -284,6 +284,7 @@ export const appRouter = router({
       .input(
         z.object({
           projectId: z.number().int().positive().optional(),
+          linkId: z.number().int().positive().optional(),
           unitNumber: z.string().optional(),
           bookingType: bookingTypeSchema.optional(),
           status: bookingStatusSchema.optional(),

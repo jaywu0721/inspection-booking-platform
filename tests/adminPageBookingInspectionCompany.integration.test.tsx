@@ -1,8 +1,24 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
+const { dashboardData, searchBookingsUseQuery } = vi.hoisted(() => ({
+  dashboardData: {
+    companies: [{ id: 10, name: "鷁欣建設" }],
+    projects: [{ id: 20, companyId: 10, name: "A1" }],
+    links: [
+      { id: 30, companyId: 10, projectId: 20, type: "initial" as const, isEnabled: true },
+      { id: 31, companyId: 10, projectId: 20, type: "reinspect" as const, isEnabled: false },
+    ],
+    slots: [],
+    residents: [],
+    bookings: [],
+    reschedules: [],
+  },
+  searchBookingsUseQuery: vi.fn(),
+}));
 
 const searchBookingsResult = [
   {
@@ -61,7 +77,7 @@ vi.mock("../client/src/components/ui/tabs", () => ({
   Tabs: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   TabsList: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   TabsTrigger: ({ children }: { children: React.ReactNode }) => <button type="button">{children}</button>,
-  TabsContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  TabsContent: ({ children, value }: { children: React.ReactNode; value: string }) => (value === "bookings" ? <div>{children}</div> : null),
 }));
 
 vi.mock("sonner", () => ({
@@ -69,6 +85,10 @@ vi.mock("sonner", () => ({
     success: vi.fn(),
     error: vi.fn(),
   },
+}));
+
+searchBookingsUseQuery.mockImplementation((filters?: { projectId?: number; linkId?: number }) => ({
+  data: filters?.linkId === 30 ? [searchBookingsResult[0]] : searchBookingsResult,
 }));
 
 vi.mock("../client/src/lib/trpc", () => ({
@@ -93,10 +113,10 @@ vi.mock("../client/src/lib/trpc", () => ({
     },
     admin: {
       dashboard: {
-        useQuery: () => ({ data: { companies: [], projects: [], links: [], slots: [], residents: [], bookings: searchBookingsResult, reschedules: [] } }),
+        useQuery: () => ({ data: dashboardData }),
       },
       searchBookings: {
-        useQuery: () => ({ data: searchBookingsResult }),
+        useQuery: searchBookingsUseQuery,
       },
       rescheduleAvailability: {
         useQuery: () => ({ data: [], error: undefined, isFetching: false, refetch: vi.fn() }),
@@ -127,5 +147,25 @@ describe("AdminPage booking inspection company integration", () => {
     expect(screen.getAllByText("有")).toHaveLength(1);
     expect(screen.getAllByText("無")).toHaveLength(1);
     expect(screen.getAllByText("鷁欣建設 / A1").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows project-specific booking links and sends linkId back to the booking query", () => {
+    searchBookingsUseQuery.mockClear();
+    render(<AdminPage />);
+
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[0], { target: { value: "20" } });
+
+    expect(screen.getByRole("option", { name: "initial / #30" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "reinspect / #31（已停用）" })).toBeTruthy();
+
+    fireEvent.change(selects[1], { target: { value: "30" } });
+
+    expect(searchBookingsUseQuery.mock.calls.at(-1)?.[0]).toMatchObject({ projectId: 20, linkId: 30 });
+
+    const bookingTable = screen.getAllByRole("table").find(table => within(table).queryByText("是否驗屋公司"));
+    expect(bookingTable).toBeTruthy();
+    expect(within(bookingTable as HTMLElement).getByText("12F-1")).toBeTruthy();
+    expect(within(bookingTable as HTMLElement).queryByText("12F-2")).toBeNull();
   });
 });

@@ -112,3 +112,12 @@
 - [x] 新增後台預約記錄列表的 UI 測試，驗證表頭出現「是否驗屋公司」且 true/false 會顯示正確內容
 - [x] 補一個 admin.searchBookings 與列表渲染串接驗證，確認 hasInspectionCompany 已被後台列表實際使用
 - [x] 新增 AdminPage 串接測試，mock `trpc.admin.searchBookings.useQuery()` 回傳含 hasInspectionCompany 的資料，驗證後台預約紀錄列表實際顯示「是否驗屋公司」欄位與內容
+- [x] 依新資料階層重新檢查並調整公司、建案、住戶、連結、時段與預約紀錄的關聯規則
+- [x] 在後台預約紀錄查詢新增該建案對應連結的下拉選單欄位，供操作員依連結篩選
+- [x] 調整連結刪除規則為同步刪除該連結對應時段與該連結下的預約紀錄
+- [x] 補上連結刪除與預約查詢連結篩選的回歸測試與交付驗證
+- [x] 新增 AdminPage 的預約查詢連結篩選整合測試，驗證選取建案後會出現對應連結下拉，選取連結後查詢會帶入 `linkId` 並顯示正確結果
+- [x] 補充公司→建案→住戶、建案→連結、連結→時段、住戶/連結/時段→預約紀錄的關聯驗證證據，避免只改到連結與時段卻沒有證明整體階層對齊
+- [x] 強化 AdminPage 預約查詢連結篩選整合測試，明確斷言非該連結的預約列不再顯示、結果集已正確縮小
+- [x] 新增後端關聯測試，直接驗證住戶與時段建立預約時的約束：resident 必須屬於該建案、slot 必須屬於該 link/site，且 booking 會寫入正確的 residentId/linkId/slotId
+- [x] 新增 createBookingRecord 的後端失敗案例測試，直接驗證傳入不屬於目前 link/site 的 `slotId` 時會被拒絕

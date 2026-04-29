@@ -105,7 +105,7 @@ export default function AdminPage() {
   });
   const [selectedSlotLinkId, setSelectedSlotLinkId] = useState("");
   const [editableSlotPresets, setEditableSlotPresets] = useState(createEditableSlotPresets());
-  const [bookingFilters, setBookingFilters] = useState({ projectId: "", unitNumber: "", bookingType: "all", status: "all", bookingDate: "" });
+  const [bookingFilters, setBookingFilters] = useState({ projectId: "", linkId: "", unitNumber: "", bookingType: "all", status: "all", bookingDate: "" });
   const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", slotDate: "", newSlotId: "", note: "" });
   const [residentListProjectId, setResidentListProjectId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link" | "slot"; id: number; label: string; step: 1 | 2 }>(null);
@@ -119,6 +119,7 @@ export default function AdminPage() {
   const bookingQuery = trpc.admin.searchBookings.useQuery(
     {
       projectId: bookingFilters.projectId ? Number(bookingFilters.projectId) : undefined,
+      linkId: bookingFilters.linkId ? Number(bookingFilters.linkId) : undefined,
       unitNumber: bookingFilters.unitNumber || undefined,
       bookingType: bookingFilters.bookingType === "all" ? undefined : (bookingFilters.bookingType as "initial" | "reinspect"),
       status: bookingFilters.status === "all" ? undefined : (bookingFilters.status as "booked" | "rescheduled" | "cancelled"),
@@ -289,6 +290,7 @@ export default function AdminPage() {
   const linkProjectOptions = useMemo(() => getProjectsForCompany(projects, linkForm.companyId), [projects, linkForm.companyId]);
   const slotProjectOptions = useMemo(() => getProjectsForCompany(projects, slotForm.companyId), [projects, slotForm.companyId]);
   const slotLinkOptions = useMemo(() => getLinksForProject(links, slotForm.projectId), [links, slotForm.projectId]);
+  const bookingFilterLinkOptions = useMemo(() => getLinksForProject(links, bookingFilters.projectId), [links, bookingFilters.projectId]);
   const projectNameById = useMemo(() => new Map(projects.map(project => [project.id, project.name])), [projects]);
   const filteredResidents = useMemo(() => filterResidentsByProject(residents, residentListProjectId), [residents, residentListProjectId]);
   const filteredSlots = useMemo(() => filterSlotsByLink(slots, selectedSlotLinkId || slotForm.linkId), [slots, selectedSlotLinkId, slotForm.linkId]);
@@ -316,6 +318,11 @@ export default function AdminPage() {
   }, [rescheduleAvailability, rescheduleForm.slotDate]);
   const isDeleting = companyDeleteMutation.isPending || projectDeleteMutation.isPending || residentDeleteMutation.isPending || linkDeleteMutation.isPending || slotDeleteMutation.isPending;
 
+  useEffect(() => {
+    if (!bookingFilters.linkId) return;
+    if (bookingFilterLinkOptions.some(link => String(link.id) === bookingFilters.linkId)) return;
+    setBookingFilters(current => ({ ...current, linkId: "" }));
+  }, [bookingFilterLinkOptions, bookingFilters.linkId]);
 
   const startEditingCompany = (company: typeof companies[number]) => {
     setCompanyForm(buildCompanyFormFromRecord(company));
@@ -836,8 +843,9 @@ export default function AdminPage() {
               <TabsContent value="bookings" className="space-y-6">
                 <Card>
                   <CardHeader><CardTitle>預約紀錄查詢</CardTitle></CardHeader>
-                  <CardContent className="grid gap-4 md:grid-cols-5">
-                    <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={bookingFilters.projectId} onChange={event => setBookingFilters(current => ({ ...current, projectId: event.target.value }))}><option value="">全部</option>{projectOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+                  <CardContent className="grid gap-4 md:grid-cols-6">
+                    <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={bookingFilters.projectId} onChange={event => setBookingFilters(current => ({ ...current, projectId: event.target.value, linkId: "" }))}><option value="">全部</option>{projectOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+                    <div className="space-y-2"><Label>該建案對應連結</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={bookingFilters.linkId} onChange={event => setBookingFilters(current => ({ ...current, linkId: event.target.value }))} disabled={!bookingFilters.projectId}><option value="">{bookingFilters.projectId ? "全部連結" : "請先選建案"}</option>{bookingFilterLinkOptions.map(link => <option key={link.id} value={link.id}>{`${link.type} / #${link.id}${link.isEnabled ? "" : "（已停用）"}`}</option>)}</select></div>
                     <div className="space-y-2"><Label>戶號</Label><Input value={bookingFilters.unitNumber} onChange={event => setBookingFilters(current => ({ ...current, unitNumber: event.target.value }))} placeholder="可模糊查詢" /></div>
                     <div className="space-y-2"><Label>類型</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={bookingFilters.bookingType} onChange={event => setBookingFilters(current => ({ ...current, bookingType: event.target.value }))}><option value="all">全部</option><option value="initial">初驗</option><option value="reinspect">複驗</option></select></div>
                     <div className="space-y-2"><Label>狀態</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={bookingFilters.status} onChange={event => setBookingFilters(current => ({ ...current, status: event.target.value }))}><option value="all">全部</option><option value="booked">booked</option><option value="rescheduled">rescheduled</option><option value="cancelled">cancelled</option></select></div>
