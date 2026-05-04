@@ -29,6 +29,16 @@ function formatDate(dateValue: string | Date) {
   });
 }
 
+function formatDateTime(dateValue: string | Date) {
+  return resolveDateValue(dateValue).toLocaleString("zh-TW", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function getDateKey(dateValue: string | Date) {
   const date = resolveDateValue(dateValue);
   const year = date.getFullYear();
@@ -319,6 +329,10 @@ export default function Home() {
 
   const company = site.company;
   const project = site.project;
+  const linkStartsAt = site.link.startsAt ? new Date(site.link.startsAt) : null;
+  const linkEndsAt = site.link.endsAt ? new Date(site.link.endsAt) : null;
+  const msUntilLinkEnds = linkEndsAt ? linkEndsAt.getTime() - Date.now() : null;
+  const isClosingSoon = typeof msUntilLinkEnds === "number" && msUntilLinkEnds > 0 && msUntilLinkEnds <= 1000 * 60 * 60 * 24;
   const displayedPrecautions = company.precautions.replace(
     "改期限制： 為確保每位住戶的權益與工班排程，本系統不開放自行改期，請見諒。",
     "改期限制：連結開放時間內可自行改期；若該案未開放改期作業或連結已截止，請自行聯絡公司。"
@@ -362,6 +376,24 @@ export default function Home() {
                   <p className="mt-2 text-lg font-medium">{company.contactPhone}</p>
                 </div>
               </div>
+              <div className="rounded-3xl border border-white/12 bg-white/8 p-5 backdrop-blur-sm">
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-sm font-medium text-white/88">預約連結開放時間</p>
+                  <Badge className={site.isExpired ? "border-destructive/40 bg-destructive/15 text-white hover:bg-destructive/15" : isClosingSoon ? "border-amber-200/40 bg-amber-200/15 text-white hover:bg-amber-200/15" : "border-emerald-200/40 bg-emerald-200/15 text-white hover:bg-emerald-200/15"}>
+                    {site.isExpired ? "已截止" : isClosingSoon ? "即將截止" : "開放中"}
+                  </Badge>
+                </div>
+                <p className="mt-3 text-base font-medium text-white">
+                  {linkStartsAt && linkEndsAt ? `${formatDateTime(linkStartsAt)} ～ ${formatDateTime(linkEndsAt)}` : "目前尚未提供完整開放時間資訊，請以建案通知為準。"}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-white/72">
+                  {site.isExpired
+                    ? "這個預約連結已超過開放時間。你仍可完成住戶驗證查看既有預約，但若要新預約或改期，請直接聯絡公司窗口。"
+                    : isClosingSoon
+                      ? "此連結即將結束預約。若你尚未完成預約或需要改期，請盡快在開放時間內處理。"
+                      : "請在以上開放時間內完成預約或改期；超過截止時間後，系統將停止住戶自行操作。"}
+                </p>
+              </div>
             </div>
             <Card className="border-white/15 bg-white/92 text-card-foreground shadow-2xl">
               <CardHeader>
@@ -387,7 +419,11 @@ export default function Home() {
                   <Alert className="border-destructive/30 bg-destructive/5">
                     <CircleAlert className="h-4 w-4" />
                     <AlertTitle>連結已截止</AlertTitle>
-                    <AlertDescription>這個初驗／複驗連結目前未啟用或已超過可預約期間，請聯絡建案窗口處理。</AlertDescription>
+                    <AlertDescription>
+                      這個初驗／複驗連結目前未啟用或已超過可預約期間。
+                      {linkEndsAt ? ` 截止時間為 ${formatDateTime(linkEndsAt)}。` : " "}
+                      請聯絡建案窗口處理。
+                    </AlertDescription>
                   </Alert>
                 ) : null}
               </CardContent>

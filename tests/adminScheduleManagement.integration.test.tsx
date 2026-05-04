@@ -52,12 +52,30 @@ vi.mock("../client/src/hooks/useRescheduleAvailabilitySync", () => ({
   useRescheduleAvailabilitySync: () => ({ syncOnDropdownOpen: vi.fn() }),
 }));
 
-vi.mock("../client/src/components/ui/tabs", () => ({
-  Tabs: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  TabsList: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  TabsTrigger: ({ children }: { children: React.ReactNode }) => <button type="button">{children}</button>,
-  TabsContent: ({ children, value }: { children: React.ReactNode; value: string }) => (value === "schedule" ? <div>{children}</div> : null),
-}));
+vi.mock("../client/src/components/ui/tabs", () => {
+  const TabsContext = React.createContext<{ value?: string; onValueChange?: (value: string) => void }>({});
+
+  return {
+    Tabs: ({ children, value, onValueChange }: { children: React.ReactNode; value?: string; onValueChange?: (value: string) => void }) => (
+      <TabsContext.Provider value={{ value, onValueChange }}>
+        <div>{children}</div>
+      </TabsContext.Provider>
+    ),
+    TabsList: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    TabsTrigger: ({ children, value, disabled }: { children: React.ReactNode; value: string; disabled?: boolean }) => {
+      const context = React.useContext(TabsContext);
+      return (
+        <button type="button" disabled={disabled} onClick={() => context.onValueChange?.(value)}>
+          {children}
+        </button>
+      );
+    },
+    TabsContent: ({ children, value }: { children: React.ReactNode; value: string }) => {
+      const context = React.useContext(TabsContext);
+      return context.value === value ? <div>{children}</div> : null;
+    },
+  };
+});
 
 vi.mock("sonner", () => ({
   toast: {
@@ -125,14 +143,16 @@ describe("AdminPage schedule management UI", () => {
 
   it("removes the disabled reason field from link management and link records table", () => {
     render(<AdminPage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "連結與時段" })[0]);
 
     expect(screen.queryByLabelText("停用原因")).toBeNull();
     expect(screen.queryByText("停用原因")).toBeNull();
     expect(screen.getByText("預約連結管理")).toBeTruthy();
   });
 
-  it("switches to date-range mode and shows range fields for preset slot creation", () => {
+  it("switches to the 日期區間 tab and shows range fields for preset slot creation", () => {
     render(<AdminPage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "連結與時段" })[0]);
 
     const slotManagementCard = screen.getAllByText("時段管理")[0].closest("[data-slot='card']") as HTMLElement;
 
@@ -141,7 +161,7 @@ describe("AdminPage schedule management UI", () => {
     fireEvent.change(slotSelects[0], { target: { value: "10" } });
     fireEvent.change(slotSelects[1], { target: { value: "20" } });
     fireEvent.change(slotSelects[2], { target: { value: "30" } });
-    fireEvent.change(slotSelects[3], { target: { value: "range" } });
+    fireEvent.click(within(slotManagementCard).getByRole("button", { name: "驗屋預約連接開放時間：日期區間" }));
 
     expect(within(slotManagementCard).getByText("區間開始")).toBeTruthy();
     expect(within(slotManagementCard).getByText("區間結束")).toBeTruthy();
@@ -150,6 +170,7 @@ describe("AdminPage schedule management UI", () => {
 
   it("creates preset slots for every day inside the selected date range", async () => {
     render(<AdminPage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "連結與時段" })[0]);
 
     const slotManagementCard = screen.getAllByText("時段管理")[0].closest("[data-slot='card']") as HTMLElement;
     const slotSelects = within(slotManagementCard).getAllByRole("combobox");
@@ -157,7 +178,7 @@ describe("AdminPage schedule management UI", () => {
     fireEvent.change(slotSelects[0], { target: { value: "10" } });
     fireEvent.change(slotSelects[1], { target: { value: "20" } });
     fireEvent.change(slotSelects[2], { target: { value: "30" } });
-    fireEvent.change(slotSelects[3], { target: { value: "range" } });
+    fireEvent.click(within(slotManagementCard).getByRole("button", { name: "驗屋預約連接開放時間：日期區間" }));
     const rangeDateInputs = slotManagementCard.querySelectorAll('input[type="date"]');
     fireEvent.change(rangeDateInputs[0], { target: { value: "2026-05-07" } });
     fireEvent.change(rangeDateInputs[1], { target: { value: "2026-05-08" } });
@@ -193,6 +214,7 @@ describe("AdminPage schedule management UI", () => {
 
   it("blocks range preset creation when any date already has the same slot for the selected link", async () => {
     render(<AdminPage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "連結與時段" })[0]);
 
     const slotManagementCard = screen.getAllByText("時段管理")[0].closest("[data-slot='card']") as HTMLElement;
     const slotSelects = within(slotManagementCard).getAllByRole("combobox");
@@ -200,7 +222,7 @@ describe("AdminPage schedule management UI", () => {
     fireEvent.change(slotSelects[0], { target: { value: "10" } });
     fireEvent.change(slotSelects[1], { target: { value: "20" } });
     fireEvent.change(slotSelects[2], { target: { value: "30" } });
-    fireEvent.change(slotSelects[3], { target: { value: "range" } });
+    fireEvent.click(within(slotManagementCard).getByRole("button", { name: "驗屋預約連接開放時間：日期區間" }));
     const rangeDateInputs = slotManagementCard.querySelectorAll('input[type="date"]');
     fireEvent.change(rangeDateInputs[0], { target: { value: "2026-05-06" } });
     fireEvent.change(rangeDateInputs[1], { target: { value: "2026-05-07" } });
@@ -215,6 +237,7 @@ describe("AdminPage schedule management UI", () => {
 
   it("loads slot data back into slot management when clicking edit and gives explicit feedback", async () => {
     render(<AdminPage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "連結與時段" })[0]);
 
     const slotTable = screen.getAllByRole("table")[1];
     fireEvent.click(within(slotTable).getByRole("button", { name: "編輯" }));

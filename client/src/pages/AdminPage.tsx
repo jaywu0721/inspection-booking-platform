@@ -802,10 +802,32 @@ export default function AdminPage() {
                     <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.companyId} onChange={event => setSlotForm(current => ({ ...current, id: "", companyId: event.target.value, projectId: "", linkId: "" }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.projectId} onChange={event => setSlotForm(current => ({ ...current, id: "", projectId: event.target.value, linkId: "" }))} disabled={!slotForm.companyId}><option value="">{slotForm.companyId ? "請選擇" : "請先選公司"}</option>{slotProjectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
                     <div className="space-y-2"><Label>預約連結</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.linkId} onChange={event => { const nextLinkId = event.target.value; setSlotForm(current => ({ ...current, id: current.id, linkId: nextLinkId })); setSelectedSlotLinkId(nextLinkId); }} disabled={!slotForm.projectId}><option value="">{slotForm.projectId ? "請選擇" : "請先選建案"}</option>{slotLinkOptions.map(link => <option key={link.id} value={link.id}>{`${link.type} / #${link.id}${link.isEnabled ? "" : "（已停用）"}`}</option>)}</select></div>
-                    <div className="space-y-2"><Label>日期模式</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={slotForm.dateMode} onChange={event => setSlotForm(current => ({ ...current, id: current.id ? current.id : "", dateMode: event.target.value as "single" | "range", slotDate: "", rangeStartDate: "", rangeEndDate: "" }))} disabled={Boolean(slotForm.id)}><option value="single">單一日期選擇</option><option value="range">日期區間選擇</option></select></div>
-                    {slotForm.dateMode === "range" && !slotForm.id ? <div className="space-y-2"><Label>區間開始</Label><Input type="date" value={slotForm.rangeStartDate} onChange={event => setSlotForm(current => ({ ...current, rangeStartDate: event.target.value }))} /></div> : <div className="space-y-2"><Label>日期</Label><Input type="date" value={slotForm.slotDate} onChange={event => setSlotForm(current => ({ ...current, slotDate: event.target.value }))} /></div>}
-                    {slotForm.dateMode === "range" && !slotForm.id ? <div className="space-y-2"><Label>區間結束</Label><Input type="date" value={slotForm.rangeEndDate} onChange={event => setSlotForm(current => ({ ...current, rangeEndDate: event.target.value }))} /></div> : <div className="space-y-2"><Label>名額</Label><Input type="number" min="1" value={slotForm.capacity} onChange={event => setSlotForm(current => ({ ...current, capacity: event.target.value }))} /></div>}
-                    {slotForm.dateMode === "range" && !slotForm.id ? <div className="space-y-2"><Label>名額</Label><Input type="number" min="1" value={slotForm.capacity} onChange={event => setSlotForm(current => ({ ...current, capacity: event.target.value }))} /></div> : null}
+                    <div className="md:col-span-2 rounded-2xl border border-border/70 bg-muted/20 p-4">
+                      <Label>時段建立模式</Label>
+                      <Tabs
+                        value={slotForm.dateMode}
+                        onValueChange={nextMode => setSlotForm(current => ({ ...current, id: current.id ? current.id : "", dateMode: nextMode as "single" | "range", slotDate: "", rangeStartDate: "", rangeEndDate: "" }))}
+                        className="mt-3 space-y-4"
+                      >
+                        <TabsList className="grid w-full h-auto grid-cols-1 gap-2 md:grid-cols-2">
+                          <TabsTrigger value="single" disabled={Boolean(slotForm.id)} className="whitespace-normal px-4 py-3 text-sm">單一日期選擇</TabsTrigger>
+                          <TabsTrigger value="range" disabled={Boolean(slotForm.id)} className="whitespace-normal px-4 py-3 text-sm">驗屋預約連接開放時間：日期區間</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="single" className="mt-0">
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2"><Label>日期</Label><Input type="date" value={slotForm.slotDate} onChange={event => setSlotForm(current => ({ ...current, slotDate: event.target.value }))} /></div>
+                            <div className="space-y-2"><Label>名額</Label><Input type="number" min="1" value={slotForm.capacity} onChange={event => setSlotForm(current => ({ ...current, capacity: event.target.value }))} /></div>
+                          </div>
+                        </TabsContent>
+                        <TabsContent value="range" className="mt-0">
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <div className="space-y-2"><Label>區間開始</Label><Input type="date" value={slotForm.rangeStartDate} onChange={event => setSlotForm(current => ({ ...current, rangeStartDate: event.target.value }))} /></div>
+                            <div className="space-y-2"><Label>區間結束</Label><Input type="date" value={slotForm.rangeEndDate} onChange={event => setSlotForm(current => ({ ...current, rangeEndDate: event.target.value }))} /></div>
+                            <div className="space-y-2"><Label>名額</Label><Input type="number" min="1" value={slotForm.capacity} onChange={event => setSlotForm(current => ({ ...current, capacity: event.target.value }))} /></div>
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                    </div>
                     <div className="space-y-2"><Label>開始</Label><Input value={slotForm.startLabel} onChange={event => setSlotForm(current => ({ ...current, startLabel: event.target.value }))} /></div>
                     <div className="space-y-2"><Label>結束</Label><Input value={slotForm.endLabel} onChange={event => setSlotForm(current => ({ ...current, endLabel: event.target.value }))} /></div>
                     <div className="flex items-center gap-3 md:col-span-2"><input type="checkbox" checked={slotForm.isActive} onChange={event => setSlotForm(current => ({ ...current, isActive: event.target.checked }))} /><span className="text-sm text-muted-foreground">啟用時段</span></div>

@@ -35,6 +35,8 @@ const siteContext = {
   link: {
     id: 30,
     type: "initial" as const,
+    startsAt: new Date("2026-05-01T09:00:00.000Z"),
+    endsAt: new Date("2026-05-31T18:00:00.000Z"),
   },
   availableSlots: [
     {
@@ -210,6 +212,8 @@ describe("Home customer reschedule flow", () => {
     expect(screen.getByText(/客戶端不能再自行改期/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "修改日期" })).toBeNull();
     expect(screen.getByText(/目前預約時間：/)).toBeTruthy();
+    expect(screen.getAllByText("已截止").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/截止時間為/).length).toBeGreaterThanOrEqual(1);
   });
 
   it("refetches latest availability and scrolls to step two after choosing a date", async () => {
@@ -236,6 +240,15 @@ describe("Home customer reschedule flow", () => {
     expect(selectedLabel).not.toBe("");
     expect(screen.getAllByText(selectedLabel).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("09:00 - 10:30")).toBeTruthy();
+  });
+
+  it("shows the booking link opening time range on the customer front-end", () => {
+    render(<Home />);
+
+    expect(screen.getAllByText("預約連結開放時間").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/2026\/05\/01/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/2026\/05\/31/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("開放中").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows the updated FAQ answer for self-reschedule handling", () => {
