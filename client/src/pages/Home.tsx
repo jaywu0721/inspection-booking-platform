@@ -12,8 +12,16 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, CalendarDays, Building2, Phone, ShieldCheck, CircleAlert } from "lucide-react";
 import { toast } from "sonner";
 
+function resolveDateValue(dateValue: string | Date) {
+  if (typeof dateValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    return new Date(`${dateValue}T12:00:00`);
+  }
+
+  return new Date(dateValue);
+}
+
 function formatDate(dateValue: string | Date) {
-  return new Date(dateValue).toLocaleDateString("zh-TW", {
+  return resolveDateValue(dateValue).toLocaleDateString("zh-TW", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -22,7 +30,11 @@ function formatDate(dateValue: string | Date) {
 }
 
 function getDateKey(dateValue: string | Date) {
-  return new Date(dateValue).toISOString().slice(0, 10);
+  const date = resolveDateValue(dateValue);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function parseBookingErrorMessage(message: string) {
@@ -80,6 +92,7 @@ export default function Home() {
   const [isRescheduleMode, setIsRescheduleMode] = useState(false);
   const [verificationResult, setVerificationResult] = useState<any>(null);
   const bookingSectionRef = useRef<HTMLDivElement | null>(null);
+  const slotSelectionSectionRef = useRef<HTMLDivElement | null>(null);
 
   const siteQuery = trpc.publicSite.getContext.useQuery(params, {
     refetchOnWindowFocus: false,
@@ -92,6 +105,7 @@ export default function Home() {
       setSelectedSlotDate("");
       setSlotId(null);
       setIsRescheduleMode(false);
+      void siteQuery.refetch?.();
       toast.success("驗證成功，已載入既有預約與可用時段");
       if (typeof window !== "undefined" && window.innerWidth < 1024) {
         window.requestAnimationFrame(() => {
@@ -146,7 +160,7 @@ export default function Home() {
   });
 
   const site = siteQuery.data;
-  const availableSlots: any[] = verificationResult?.site.availableSlots ?? site?.availableSlots ?? [];
+  const availableSlots: any[] = site?.availableSlots ?? verificationResult?.site.availableSlots ?? [];
   const availableDates: Array<{ key: string; label: string; count: number }> = Array.from(
     availableSlots.reduce((map, slot) => {
       const key = getDateKey(slot.slotDate);
@@ -169,6 +183,19 @@ export default function Home() {
       setSlotId(null);
     }
   }, [slotId, visibleSlots]);
+
+  const scrollToSlotSelectionStep = () => {
+    window.requestAnimationFrame(() => {
+      slotSelectionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const handleDateSelection = (dateKey: string) => {
+    setSelectedSlotDate(dateKey);
+    setSlotId(null);
+    void siteQuery.refetch();
+    scrollToSlotSelectionStep();
+  };
 
   const submitVerification = async () => {
     await verifyMutation.mutateAsync({
@@ -399,12 +426,18 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <Accordion type="single" collapsible className="w-full">
-                  {company.faqItems.map((item, index) => (
-                    <AccordionItem key={`${item.question}-${index}`} value={`faq-${index}`}>
-                      <AccordionTrigger>{item.question}</AccordionTrigger>
-                      <AccordionContent className="leading-7 text-muted-foreground">{item.answer}</AccordionContent>
-                    </AccordionItem>
-                  ))}
+                  {company.faqItems.map((item, index) => {
+                    const answer = item.question === "如果要改期怎麼處理？"
+                      ? "連結開放時間內均可自行改期；若該連結未開放改期或已截止，請自行聯絡公司窗口協助處理。"
+                      : item.answer;
+
+                    return (
+                      <AccordionItem key={`${item.question}-${index}`} value={`faq-${index}`}>
+                        <AccordionTrigger>{item.question}</AccordionTrigger>
+                        <AccordionContent className="leading-7 text-muted-foreground">{answer}</AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
                 </Accordion>
               </CardContent>
             </Card>
@@ -477,7 +510,9 @@ export default function Home() {
 
                       <div className="space-y-4">
                         <h3 className="font-semibold">{sameLinkExistingBooking ? "修改既有預約" : "選擇新的預約時段"}</h3>
-                        {sameLinkExistingBooking ? (
+                        {site.isExpired && !sameLinkExistingBooking ? (
+                          <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">此預約連結已截止。你仍可完成住戶驗證查看既有預約紀錄，但目前不能再選擇新的日期或時段；若現在才要預約，請直接聯絡頁面上的窗口。</div>
+                        ) : sameLinkExistingBooking ? (
                           <>
                             <Alert className="border-amber-300/60 bg-amber-50 text-amber-950">
                               <CircleAlert className="h-4 w-4" />
@@ -502,6 +537,7 @@ export default function Home() {
                                   setIsRescheduleMode(true);
                                   setSelectedSlotDate("");
                                   setSlotId(null);
+                                  void siteQuery.refetch?.();
                                 }}
                               >
                                 修改日期
@@ -543,8 +579,7 @@ export default function Home() {
                                                 key={dateOption.key}
                                                 type="button"
                                                 onClick={() => {
-                                                  setSelectedSlotDate(dateOption.key);
-                                                  setSlotId(null);
+                                                  handleDateSelection(dateOption.key);
                                                 }}
                                                 className={`w-full rounded-2xl border p-4 text-left transition ${isSelectedDate ? "border-primary bg-primary/5 shadow-sm" : "border-border/80 hover:border-primary/40"}`}
                                               >
@@ -560,7 +595,7 @@ export default function Home() {
                                           })}
                                         </div>
                                       </div>
-                                      <div className="space-y-3">
+                                      <div ref={slotSelectionSectionRef} className="space-y-3">
                                         <div className="flex items-center justify-between gap-3">
                                           <h4 className="font-medium">第二步：選擇新的時間</h4>
                                           {selectedSlotDate ? <Badge variant="outline">{formatDate(selectedSlotDate)}</Badge> : null}
@@ -643,7 +678,7 @@ export default function Home() {
                                       })}
                                     </div>
                                   </div>
-                                  <div className="space-y-3">
+                                  <div ref={slotSelectionSectionRef} className="space-y-3">
                                     <div className="flex items-center justify-between gap-3">
                                       <h4 className="font-medium">第二步：選擇時間</h4>
                                       {selectedSlotDate ? <Badge variant="outline">{formatDate(selectedSlotDate)}</Badge> : null}

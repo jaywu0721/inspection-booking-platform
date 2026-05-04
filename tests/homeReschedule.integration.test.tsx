@@ -4,10 +4,12 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { rescheduleBookingMutateAsync, toastSuccess, toastError } = vi.hoisted(() => ({
+const { rescheduleBookingMutateAsync, toastSuccess, toastError, getContextRefetch, scrollIntoViewMock } = vi.hoisted(() => ({
   rescheduleBookingMutateAsync: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
+  getContextRefetch: vi.fn(async () => ({ data: siteContext })),
+  scrollIntoViewMock: vi.fn(),
 }));
 
 const siteContext = {
@@ -19,7 +21,7 @@ const siteContext = {
     inspectionFlow: "驗屋流程說明",
     handoverFlow: "交屋流程說明",
     precautions: "注意事項",
-    faqItems: [{ question: "Q1", answer: "A1" }],
+    faqItems: [{ question: "如果要改期怎麼處理？", answer: "舊版文案" }],
     contactWindow: "客服窗口",
     contactPhone: "02-1234-5678",
     contactEmail: "service@example.com",
@@ -95,7 +97,7 @@ vi.mock("../client/src/lib/trpc", () => ({
   trpc: {
     publicSite: {
       getContext: {
-        useQuery: () => ({ data: siteContext, isLoading: false, error: null }),
+        useQuery: () => ({ data: siteContext, isLoading: false, error: null, refetch: getContextRefetch }),
       },
       verifyResident: {
         useMutation: (options?: { onSuccess?: (result: ReturnType<typeof createVerificationResult>) => void }) => ({
@@ -133,7 +135,28 @@ describe("Home customer reschedule flow", () => {
     rescheduleBookingMutateAsync.mockReset();
     toastSuccess.mockReset();
     toastError.mockReset();
+    getContextRefetch.mockClear();
+    scrollIntoViewMock.mockClear();
+    siteContext.isExpired = false;
+    siteContext.company.faqItems = [{ question: "如果要改期怎麼處理？", answer: "舊版文案" }];
+    siteContext.availableSlots = [
+      {
+        id: 101,
+        slotDate: new Date("2026-05-20T00:00:00.000Z"),
+        startLabel: "09:00",
+        endLabel: "10:30",
+        remaining: 2,
+      },
+      {
+        id: 102,
+        slotDate: new Date("2026-05-20T00:00:00.000Z"),
+        startLabel: "10:30",
+        endLabel: "12:00",
+        remaining: 1,
+      },
+    ];
     window.history.replaceState({}, "", "/?link=demo-link-token");
+    HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
   });
 
   async function verifyResident() {
@@ -178,5 +201,48 @@ describe("Home customer reschedule flow", () => {
         })
       );
     });
+  });
+
+  it("still allows resident verification after the link expires, but hides editing actions", async () => {
+    siteContext.isExpired = true;
+    await verifyResident();
+
+    expect(screen.getByText(/客戶端不能再自行改期/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "修改日期" })).toBeNull();
+    expect(screen.getByText(/目前預約時間：/)).toBeTruthy();
+  });
+
+  it("refetches latest availability and scrolls to step two after choosing a date", async () => {
+    await verifyResident();
+
+    fireEvent.click(screen.getByRole("button", { name: "修改日期" }));
+    fireEvent.click(screen.getAllByText("點選後顯示該日期仍可改期的時段")[0].closest("button") as HTMLElement);
+
+    await waitFor(() => {
+      expect(getContextRefetch).toHaveBeenCalled();
+      expect(scrollIntoViewMock).toHaveBeenCalled();
+    });
+  });
+
+  it("keeps the second-step date display aligned with the date the customer just chose", async () => {
+    await verifyResident();
+
+    fireEvent.click(screen.getByRole("button", { name: "修改日期" }));
+    const dateButton = screen.getAllByText("點選後顯示該日期仍可改期的時段")[0].closest("button") as HTMLElement;
+    const selectedLabel = dateButton.querySelector("p")?.textContent ?? "";
+
+    fireEvent.click(dateButton);
+
+    expect(selectedLabel).not.toBe("");
+    expect(screen.getAllByText(selectedLabel).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("09:00 - 10:30")).toBeTruthy();
+  });
+
+  it("shows the updated FAQ answer for self-reschedule handling", () => {
+    render(<Home />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "如果要改期怎麼處理？" })[0]);
+
+    expect(screen.getByText("連結開放時間內均可自行改期；若該連結未開放改期或已截止，請自行聯絡公司窗口協助處理。")).toBeTruthy();
   });
 });

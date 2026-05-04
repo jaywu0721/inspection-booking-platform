@@ -65,7 +65,7 @@ function seedFaq(companyName: string) {
     },
     {
       question: "如果要改期怎麼處理？",
-      answer: "前台不提供自行改期，請直接聯繫頁面上的聯絡窗口，由管理員協助調整。",
+      answer: "連結開放時間內均可自行改期；若該連結未開放改期或已截止，請自行聯絡公司窗口協助處理。",
     },
     {
       question: "一定要填 Gmail 嗎？",
@@ -413,10 +413,6 @@ export async function verifyResidentForBooking(input: PublicSiteLinkInput & {
   const site = await getPublicSiteContext(input);
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
-
-  if (site.isExpired) {
-    throw new Error("此預約連結已截止");
-  }
 
   const [resident] = await db
     .select()
