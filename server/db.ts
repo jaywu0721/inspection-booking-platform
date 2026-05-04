@@ -354,6 +354,25 @@ async function getSlotUsage(projectId: number) {
   return new Map(usage.map(item => [item.slotId, Number(item.used)]));
 }
 
+function isPublicSelectableSlot(slotDate: Date, remaining: number) {
+  const today = new Date();
+  const startOfTodayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  return new Date(slotDate).getTime() >= startOfTodayMs && remaining > 0;
+}
+
+async function lockRowForUpdate(tx: { execute?: (query: unknown) => Promise<unknown> }, tableName: "bookings" | "bookingSlots", id: number) {
+  if (typeof tx.execute !== "function") {
+    return;
+  }
+
+  if (tableName === "bookings") {
+    await tx.execute(sql`SELECT id FROM bookings WHERE id = ${id} FOR UPDATE`);
+    return;
+  }
+
+  await tx.execute(sql`SELECT id FROM bookingSlots WHERE id = ${id} FOR UPDATE`);
+}
+
 export async function getPublicSiteContext(input: PublicSiteLinkInput) {
   const row = await getActiveLink(input);
   const now = new Date();
@@ -368,13 +387,15 @@ export async function getPublicSiteContext(input: PublicSiteLinkInput) {
     .where(and(eq(bookingSlots.projectId, row.project.id), eq(bookingSlots.linkId, row.link.id), eq(bookingSlots.isActive, true)))
     .orderBy(asc(bookingSlots.slotDate), asc(bookingSlots.startLabel));
 
-  const availableSlots = slotRows.map(slot => {
-    const used = slotUsage.get(slot.id) ?? 0;
-    return {
-      ...slot,
-      remaining: calculateRemainingCapacity(slot.capacity, used),
-    };
-  });
+  const availableSlots = (isExpired ? [] : slotRows)
+    .map(slot => {
+      const used = slotUsage.get(slot.id) ?? 0;
+      return {
+        ...slot,
+        remaining: calculateRemainingCapacity(slot.capacity, used),
+      };
+    })
+    .filter(slot => isPublicSelectableSlot(slot.slotDate, slot.remaining));
 
   return {
     company: row.company,
@@ -417,6 +438,7 @@ export async function verifyResidentForBooking(input: PublicSiteLinkInput & {
     .select({
       id: bookings.id,
       linkId: bookings.linkId,
+      slotId: bookings.slotId,
       bookingType: bookings.bookingType,
       status: bookings.status,
       gmail: bookings.gmail,
@@ -506,13 +528,25 @@ export async function createBookingRecord(input: PublicSiteLinkInput & {
       throw new Error(`你已預約 ${reservedDate} ${existing.startLabel}-${existing.endLabel}，不得重複預約`);
     }
 
+    await lockRowForUpdate(tx as { execute?: (query: unknown) => Promise<unknown> }, "bookingSlots", slot.id);
+
+    const [lockedSlot] = await tx
+      .select()
+      .from(bookingSlots)
+      .where(and(eq(bookingSlots.id, slot.id), eq(bookingSlots.projectId, site.project.id), eq(bookingSlots.linkId, site.link.id), eq(bookingSlots.isActive, true)))
+      .limit(1);
+
+    if (!lockedSlot) {
+      throw new Error("選擇的時段不存在或已停用");
+    }
+
     const [slotUsage] = await tx
       .select({ used: count(bookings.id) })
       .from(bookings)
-      .where(and(eq(bookings.slotId, slot.id), sql`${bookings.status} <> 'cancelled'`));
+      .where(and(eq(bookings.slotId, lockedSlot.id), sql`${bookings.status} <> 'cancelled'`));
 
     const used = Number(slotUsage?.used ?? 0);
-    if (used >= slot.capacity) {
+    if (used >= lockedSlot.capacity) {
       throw new Error("該時段已額滿，請改選其他時段");
     }
 
@@ -522,7 +556,7 @@ export async function createBookingRecord(input: PublicSiteLinkInput & {
       projectId: site.project.id,
       linkId: site.link.id,
       residentId: resident.id,
-      slotId: slot.id,
+      slotId: lockedSlot.id,
       bookingType: site.link.type,
       unitNumberSnapshot: resident.unitNumber,
       phoneNumberSnapshot: resident.phoneNumber,
@@ -926,19 +960,55 @@ export async function rescheduleBookingRecord(input: {
   newSlotId: number;
   note?: string;
   changedBy: string;
+  expectedCurrentSlotId?: number;
+  requiredResidentId?: number;
+  requiredLinkId?: number;
+  sameSlotMessage?: string;
+  staleMessage?: string;
+  fullMessage?: string;
+  slotUnavailableMessage?: string;
+  bookingNotFoundMessage?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
   return db.transaction(async tx => {
+    await lockRowForUpdate(tx as { execute?: (query: unknown) => Promise<unknown> }, "bookings", input.bookingId);
+
     const [booking] = await tx.select().from(bookings).where(eq(bookings.id, input.bookingId)).limit(1);
     if (!booking) {
-      throw new Error("找不到預約紀錄");
+      throw new Error(input.bookingNotFoundMessage ?? "找不到預約紀錄");
     }
+
+    if (input.requiredResidentId && booking.residentId !== input.requiredResidentId) {
+      throw new Error(input.bookingNotFoundMessage ?? "找不到預約紀錄");
+    }
+
+    if (input.requiredLinkId && booking.linkId !== input.requiredLinkId) {
+      throw new Error(input.bookingNotFoundMessage ?? "找不到預約紀錄");
+    }
+
+    if (typeof input.expectedCurrentSlotId === "number" && booking.slotId !== input.expectedCurrentSlotId) {
+      throw new Error(input.staleMessage ?? "預約資料已更新，請重新整理後再試");
+    }
+
+    if (booking.slotId === input.newSlotId && input.sameSlotMessage) {
+      throw new Error(input.sameSlotMessage);
+    }
+
+    await lockRowForUpdate(tx as { execute?: (query: unknown) => Promise<unknown> }, "bookingSlots", input.newSlotId);
 
     const [newSlot] = await tx.select().from(bookingSlots).where(eq(bookingSlots.id, input.newSlotId)).limit(1);
     if (!newSlot || !newSlot.isActive) {
-      throw new Error("新時段不存在或已停用");
+      throw new Error(input.slotUnavailableMessage ?? "新時段不存在或已停用");
+    }
+
+    if (booking.linkId && newSlot.linkId !== booking.linkId) {
+      throw new Error(input.slotUnavailableMessage ?? "新時段不存在或已停用");
+    }
+
+    if (input.requiredLinkId && newSlot.linkId !== input.requiredLinkId) {
+      throw new Error(input.slotUnavailableMessage ?? "新時段不存在或已停用");
     }
 
     const [usage] = await tx
@@ -947,15 +1017,17 @@ export async function rescheduleBookingRecord(input: {
       .where(and(eq(bookings.slotId, newSlot.id), sql`${bookings.status} <> 'cancelled'`));
 
     if (!hasRescheduleCapacity(newSlot.capacity, Number(usage?.used ?? 0))) {
-      throw new Error("新時段已額滿");
+      throw new Error(input.fullMessage ?? "新時段已額滿");
     }
+
+    const changedAtMs = nowMs();
 
     await tx.insert(bookingReschedules).values({
       bookingId: booking.id,
       oldSlotId: booking.slotId,
       newSlotId: newSlot.id,
       note: input.note ?? null,
-      changedAtMs: nowMs(),
+      changedAtMs,
       changedBy: input.changedBy,
     });
 
@@ -965,10 +1037,48 @@ export async function rescheduleBookingRecord(input: {
         slotId: newSlot.id,
         status: "rescheduled",
         internalNote: input.note ?? null,
-        updatedAtMs: nowMs(),
+        updatedAtMs: changedAtMs,
       })
       .where(eq(bookings.id, booking.id));
 
     return booking.id;
+  });
+}
+
+export async function publicRescheduleBookingRecord(input: PublicSiteLinkInput & {
+  bookingId: number;
+  residentId: number;
+  currentSlotId: number;
+  newSlotId: number;
+}) {
+  const site = await getPublicSiteContext(input);
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  if (site.isExpired) {
+    throw new Error("此預約連結已截止");
+  }
+
+  const [resident] = await db.select().from(residents).where(eq(residents.id, input.residentId)).limit(1);
+  if (!resident) {
+    throw new Error("住戶資料不存在");
+  }
+
+  if (resident.projectId !== site.project.id || resident.companyId !== site.company.id) {
+    throw new Error("此住戶不屬於目前建案，不能使用這個預約連結");
+  }
+
+  return rescheduleBookingRecord({
+    bookingId: input.bookingId,
+    newSlotId: input.newSlotId,
+    changedBy: "customer",
+    expectedCurrentSlotId: input.currentSlotId,
+    requiredResidentId: resident.id,
+    requiredLinkId: site.link.id,
+    bookingNotFoundMessage: "找不到對應預約資料",
+    slotUnavailableMessage: "選擇的時段不存在或已停用",
+    sameSlotMessage: "您目前已預約此時段",
+    staleMessage: "預約資料已更新，請重新整理後再試",
+    fullMessage: "該時段已無剩餘名額",
   });
 }

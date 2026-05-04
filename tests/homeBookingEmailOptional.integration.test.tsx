@@ -89,6 +89,12 @@ vi.mock("../client/src/lib/trpc", () => ({
           },
         }),
       },
+      rescheduleBooking: {
+        useMutation: () => ({
+          isPending: false,
+          mutateAsync: async () => ({ success: true }),
+        }),
+      },
     },
   },
 }));

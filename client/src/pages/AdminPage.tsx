@@ -96,7 +96,7 @@ export default function AdminPage() {
   const [selectedSlotLinkId, setSelectedSlotLinkId] = useState("");
   const [editableSlotPresets, setEditableSlotPresets] = useState(createEditableSlotPresets());
   const [bookingFilters, setBookingFilters] = useState({ projectId: "", linkId: "", unitNumber: "", bookingType: "all", status: "all", bookingDate: "" });
-  const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", slotDate: "", newSlotId: "", note: "" });
+  const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "" });
   const [residentListProjectId, setResidentListProjectId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link" | "slot"; id: number; label: string; step: 1 | 2 }>(null);
 
@@ -223,7 +223,7 @@ export default function AdminPage() {
     onSuccess: async () => {
       toast.success("預約已完成改期");
       await refreshAll();
-      setRescheduleForm({ bookingId: "", slotDate: "", newSlotId: "", note: "" });
+      setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "" });
     },
     onError: error => toast.error(error.message),
   });
@@ -376,6 +376,7 @@ export default function AdminPage() {
   const startEditingBooking = (booking: typeof bookings[number]) => {
     setRescheduleForm({
       bookingId: String(booking.id),
+      currentSlotId: String(booking.slotId),
       slotDate: new Date(booking.slotDate).toISOString().slice(0, 10),
       newSlotId: "",
       note: booking.internalNote || "",
@@ -383,7 +384,7 @@ export default function AdminPage() {
   };
 
   const cancelEditingBooking = () => {
-    setRescheduleForm({ bookingId: "", slotDate: "", newSlotId: "", note: "" });
+    setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "" });
   };
 
   useEffect(() => {
@@ -508,6 +509,7 @@ export default function AdminPage() {
 
     rescheduleMutation.mutate({
       bookingId: Number(rescheduleForm.bookingId),
+      currentSlotId: rescheduleForm.currentSlotId ? Number(rescheduleForm.currentSlotId) : undefined,
       newSlotId: Number(rescheduleForm.newSlotId),
       note: rescheduleForm.note || undefined,
     });

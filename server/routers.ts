@@ -20,6 +20,7 @@ import {
   getAdminProfile,
   getAdminRescheduleAvailability,
   getPublicSiteContext,
+  publicRescheduleBookingRecord,
   rescheduleBookingRecord,
   searchBookings,
   setBookingLinkEnabledRecord,
@@ -61,6 +62,13 @@ export const createBookingInputSchema = publicSiteLocatorSchema.safeExtend({
   hasInspectionCompany: z.boolean(),
 });
 
+export const publicRescheduleBookingInputSchema = publicSiteLocatorSchema.safeExtend({
+  bookingId: z.number().int().positive(),
+  residentId: z.number().int().positive(),
+  currentSlotId: z.number().int().positive(),
+  newSlotId: z.number().int().positive(),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -85,6 +93,12 @@ export const appRouter = router({
       .input(createBookingInputSchema)
       .mutation(async ({ input }) => {
         const bookingId = await createBookingRecord(input);
+        return { success: true, bookingId } as const;
+      }),
+    rescheduleBooking: publicProcedure
+      .input(publicRescheduleBookingInputSchema)
+      .mutation(async ({ input }) => {
+        const bookingId = await publicRescheduleBookingRecord(input);
         return { success: true, bookingId } as const;
       }),
   }),
@@ -303,13 +317,19 @@ export const appRouter = router({
       .input(
         z.object({
           bookingId: z.number().int().positive(),
+          currentSlotId: z.number().int().positive().optional(),
           newSlotId: z.number().int().positive(),
           note: z.string().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
         const session = requireAdmin(ctx.req.headers);
-        const id = await rescheduleBookingRecord({ ...input, changedBy: session.username });
+        const id = await rescheduleBookingRecord({
+          ...input,
+          changedBy: session.username,
+          expectedCurrentSlotId: input.currentSlotId,
+          staleMessage: "預約資料已更新，請重新整理後再試",
+        });
         return { success: true, id } as const;
       }),
   }),

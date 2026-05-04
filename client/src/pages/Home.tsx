@@ -77,6 +77,7 @@ export default function Home() {
   const [slotId, setSlotId] = useState<number | null>(null);
   const [selectedSlotDate, setSelectedSlotDate] = useState("");
   const [hasInspectionCompany, setHasInspectionCompany] = useState(false);
+  const [isRescheduleMode, setIsRescheduleMode] = useState(false);
   const [verificationResult, setVerificationResult] = useState<any>(null);
   const bookingSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -90,6 +91,7 @@ export default function Home() {
       setVerificationResult(result);
       setSelectedSlotDate("");
       setSlotId(null);
+      setIsRescheduleMode(false);
       toast.success("驗證成功，已載入既有預約與可用時段");
       if (typeof window !== "undefined" && window.innerWidth < 1024) {
         window.requestAnimationFrame(() => {
@@ -99,6 +101,7 @@ export default function Home() {
     },
     onError: error => {
       setVerificationResult(null);
+      setIsRescheduleMode(false);
       toast.error(error.message);
     },
   });
@@ -120,6 +123,25 @@ export default function Home() {
     },
     onError: error => {
       toast.error(parseBookingErrorMessage(error.message));
+    },
+  });
+
+  const rescheduleBookingMutation = trpc.publicSite.rescheduleBooking.useMutation({
+    onSuccess: async () => {
+      toast.success("預約日期已更新");
+      if (!verificationResult?.resident) return;
+      const refreshed = await verifyMutation.mutateAsync({
+        ...params,
+        unitNumber,
+        phoneNumber,
+      });
+      setVerificationResult(refreshed);
+      setSlotId(null);
+      setSelectedSlotDate("");
+      setIsRescheduleMode(false);
+    },
+    onError: error => {
+      toast.error(error.message);
     },
   });
 
@@ -175,6 +197,46 @@ export default function Home() {
       slotId,
       gmail: gmail.trim(),
       hasInspectionCompany,
+    });
+  };
+
+  const submitReschedule = async () => {
+    if (!verificationResult?.resident) {
+      toast.error("請先完成住戶驗證");
+      return;
+    }
+
+    if (!sameLinkExistingBooking) {
+      toast.error("目前沒有可修改的預約紀錄");
+      return;
+    }
+
+    if (site?.isExpired) {
+      toast.error("此預約連結已截止，請聯絡窗口由管理員協助改期");
+      return;
+    }
+
+    if (!selectedSlotDate) {
+      toast.error("請先選擇新的預約日期");
+      return;
+    }
+
+    if (!slotId) {
+      toast.error("請先選擇新的預約時段");
+      return;
+    }
+
+    if (slotId === sameLinkExistingBooking.slotId) {
+      toast.error("您目前已預約此時段");
+      return;
+    }
+
+    await rescheduleBookingMutation.mutateAsync({
+      ...params,
+      bookingId: sameLinkExistingBooking.id,
+      residentId: verificationResult.resident.id,
+      currentSlotId: sameLinkExistingBooking.slotId,
+      newSlotId: slotId,
     });
   };
 
@@ -414,15 +476,136 @@ export default function Home() {
                     </div>
 
                       <div className="space-y-4">
-                        <h3 className="font-semibold">選擇新的預約時段</h3>
+                        <h3 className="font-semibold">{sameLinkExistingBooking ? "修改既有預約" : "選擇新的預約時段"}</h3>
                         {sameLinkExistingBooking ? (
-                          <Alert className="border-amber-300/60 bg-amber-50 text-amber-950">
-                            <CircleAlert className="h-4 w-4" />
-                            <AlertTitle>你已完成預約，不得重複預約</AlertTitle>
-                            <AlertDescription>
-                              你已預約時間：{formatDate(sameLinkExistingBooking.slotDate)} {sameLinkExistingBooking.startLabel} - {sameLinkExistingBooking.endLabel}。若需改期，請直接聯繫頁面上的聯絡窗口，由管理員協助調整。
-                            </AlertDescription>
-                          </Alert>
+                          <>
+                            <Alert className="border-amber-300/60 bg-amber-50 text-amber-950">
+                              <CircleAlert className="h-4 w-4" />
+                              <AlertTitle>你已完成預約</AlertTitle>
+                              <AlertDescription className="space-y-3">
+                                <p>
+                                  目前預約時間：{formatDate(sameLinkExistingBooking.slotDate)} {sameLinkExistingBooking.startLabel} - {sameLinkExistingBooking.endLabel}
+                                </p>
+                                <p>
+                                  這裡只允許你在連結開放期間內修改日期時段，聯絡資料維持原紀錄不開放編輯。連結截止後，就只能由管理員在後台協助改期。
+                                </p>
+                              </AlertDescription>
+                            </Alert>
+
+                            {site.isExpired ? (
+                              <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">這個預約連結目前未啟用或已超過可操作期間，客戶端不能再自行改期，請直接聯絡頁面上的窗口。</div>
+                            ) : !isRescheduleMode ? (
+                              <Button
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => {
+                                  setIsRescheduleMode(true);
+                                  setSelectedSlotDate("");
+                                  setSlotId(null);
+                                }}
+                              >
+                                修改日期
+                              </Button>
+                            ) : (
+                              <>
+                                <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4">
+                                  <div>
+                                    <p className="font-medium">請重新選擇日期與時段</p>
+                                    <p className="text-sm text-muted-foreground">先送出者取得名額。若資料已被更新，你會收到重新整理提示。</p>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setIsRescheduleMode(false);
+                                      setSelectedSlotDate("");
+                                      setSlotId(null);
+                                    }}
+                                  >
+                                    取消
+                                  </Button>
+                                </div>
+                                <div className="space-y-4">
+                                  {availableSlots.length === 0 ? (
+                                    <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">目前沒有可改期的時段。這通常代表連結下暫時沒有仍開放、未過期且有餘額的時段。</div>
+                                  ) : (
+                                    <>
+                                      <div className="space-y-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <h4 className="font-medium">第一步：先選擇新的日期</h4>
+                                          <Badge variant="secondary">{availableDates.length} 天</Badge>
+                                        </div>
+                                        <div className="space-y-3">
+                                          {availableDates.map(dateOption => {
+                                            const isSelectedDate = selectedSlotDate === dateOption.key;
+                                            return (
+                                              <button
+                                                key={dateOption.key}
+                                                type="button"
+                                                onClick={() => {
+                                                  setSelectedSlotDate(dateOption.key);
+                                                  setSlotId(null);
+                                                }}
+                                                className={`w-full rounded-2xl border p-4 text-left transition ${isSelectedDate ? "border-primary bg-primary/5 shadow-sm" : "border-border/80 hover:border-primary/40"}`}
+                                              >
+                                                <div className="flex items-center justify-between gap-3">
+                                                  <div>
+                                                    <p className="font-medium">{dateOption.label}</p>
+                                                    <p className="text-sm text-muted-foreground">點選後顯示該日期仍可改期的時段</p>
+                                                  </div>
+                                                  <Badge variant={isSelectedDate ? "default" : "secondary"}>{dateOption.count} 個時段</Badge>
+                                                </div>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                      <div className="space-y-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <h4 className="font-medium">第二步：選擇新的時間</h4>
+                                          {selectedSlotDate ? <Badge variant="outline">{formatDate(selectedSlotDate)}</Badge> : null}
+                                        </div>
+                                        {!selectedSlotDate ? (
+                                          <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">請先選擇日期，再查看該日期可改期時間。</div>
+                                        ) : (
+                                          <div className="space-y-3">
+                                            {visibleSlots.map((slot: any) => {
+                                              const isFull = slot.remaining <= 0;
+                                              const isCurrentSlot = slot.id === sameLinkExistingBooking.slotId;
+                                              const isSelected = slotId === slot.id;
+                                              return (
+                                                <button
+                                                  key={slot.id}
+                                                  type="button"
+                                                  onClick={() => !isFull && setSlotId(slot.id)}
+                                                  className={`w-full rounded-2xl border p-4 text-left transition ${isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border/80 hover:border-primary/40"} ${isFull ? "cursor-not-allowed opacity-55" : ""}`}
+                                                  disabled={isFull}
+                                                >
+                                                  <div className="flex items-center justify-between gap-3">
+                                                    <div>
+                                                      <p className="font-medium">{slot.startLabel} - {slot.endLabel}</p>
+                                                      <p className="text-sm text-muted-foreground">可改期名額以你送出當下的實際剩餘為準。{isCurrentSlot ? " 目前已預約此時段，不能原時段送出。" : ""}</p>
+                                                    </div>
+                                                    <Badge variant={isFull ? "destructive" : isCurrentSlot ? "outline" : "secondary"}>
+                                                      {isFull ? "已額滿" : isCurrentSlot ? "目前時段" : `剩餘 ${slot.remaining} 名`}
+                                                    </Badge>
+                                                  </div>
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                                <Button className="w-full" onClick={submitReschedule} disabled={rescheduleBookingMutation.isPending || site.isExpired}>
+                                  {rescheduleBookingMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                  確認修改日期
+                                </Button>
+                              </>
+                            )}
+                          </>
                         ) : (
                           <>
                             <div className="space-y-4">
@@ -483,7 +666,7 @@ export default function Home() {
                                               <div className="flex items-center justify-between gap-3">
                                                 <div>
                                                   <p className="font-medium">{slot.startLabel} - {slot.endLabel}</p>
-                                                  <p className="text-sm text-muted-foreground">{formatDate(slot.slotDate)}</p>
+                                                  <p className="text-sm text-muted-foreground">可預約名額以你送出當下的實際剩餘為準。</p>
                                                 </div>
                                                 <Badge variant={isFull ? "destructive" : "secondary"}>{isFull ? "已額滿" : `剩餘 ${slot.remaining} 名`}</Badge>
                                               </div>
@@ -511,6 +694,7 @@ export default function Home() {
                           </>
                         )}
                       </div>
+
 
                   </>
                 )}
