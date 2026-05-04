@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { bookingEmailSchema } from "../shared/bookingEmail";
 import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -53,6 +54,13 @@ function requireAdmin(headers: Record<string, unknown> | undefined) {
   return session;
 }
 
+export const createBookingInputSchema = publicSiteLocatorSchema.safeExtend({
+  residentId: z.number().int().positive(),
+  slotId: z.number().int().positive(),
+  gmail: bookingEmailSchema,
+  hasInspectionCompany: z.boolean(),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -74,21 +82,7 @@ export const appRouter = router({
       )
       .mutation(({ input }) => verifyResidentForBooking(input)),
     createBooking: publicProcedure
-      .input(
-        publicSiteLocatorSchema.safeExtend({
-          residentId: z.number().int().positive(),
-          slotId: z.number().int().positive(),
-          gmail: z
-            .string()
-            .trim()
-            .min(1, { message: "請填寫信箱" })
-            .email({ message: "請填寫有效的 Email 信箱" })
-            .refine(value => value.endsWith("@gmail.com"), {
-              message: "請填寫 Gmail 信箱",
-            }),
-          hasInspectionCompany: z.boolean(),
-        })
-      )
+      .input(createBookingInputSchema)
       .mutation(async ({ input }) => {
         const bookingId = await createBookingRecord(input);
         return { success: true, bookingId } as const;

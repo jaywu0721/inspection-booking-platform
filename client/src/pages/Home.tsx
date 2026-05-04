@@ -29,9 +29,9 @@ function parseBookingErrorMessage(message: string) {
   try {
     const parsed = JSON.parse(message);
     if (Array.isArray(parsed)) {
-      const gmailRequiredIssue = parsed.find(issue => issue?.path?.[0] === "gmail" && issue?.message === "請填寫信箱");
-      if (gmailRequiredIssue?.message) {
-        return gmailRequiredIssue.message;
+      const emailIssue = parsed.find(issue => issue?.path?.[0] === "gmail");
+      if (emailIssue?.message) {
+        return emailIssue.message;
       }
     }
   } catch {
@@ -169,16 +169,11 @@ export default function Home() {
       toast.error("請先選擇預約時段");
       return;
     }
-    if (!gmail.trim()) {
-      toast.error("請填寫信箱");
-      return;
-    }
-
     await createBookingMutation.mutateAsync({
       ...params,
       residentId: verificationResult.resident.id,
       slotId,
-      gmail,
+      gmail: gmail.trim(),
       hasInspectionCompany,
     });
   };
@@ -502,8 +497,8 @@ export default function Home() {
                               )}
                             </div>
                             <div className="space-y-2">
-                              <Label htmlFor="gmail">Gmail</Label>
-                              <Input id="gmail" type="email" value={gmail} onChange={event => setGmail(event.target.value)} placeholder="yourname@gmail.com" />
+                              <Label htmlFor="gmail">Email（選填）</Label>
+                              <Input id="gmail" type="email" value={gmail} onChange={event => setGmail(event.target.value)} placeholder="name@example.com" />
                             </div>
                             <label className="flex items-center gap-3 rounded-2xl border border-border/70 p-4">
                               <Checkbox checked={hasInspectionCompany} onCheckedChange={checked => setHasInspectionCompany(Boolean(checked))} />
