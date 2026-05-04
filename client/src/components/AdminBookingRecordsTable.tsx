@@ -31,6 +31,7 @@ export type AdminBookingSlotOption = { id: number; startLabel: string; endLabel:
 
 export function formatDateOnly(value: string | number | Date) {
   return new Date(value).toLocaleDateString("zh-TW", {
+    timeZone: "Asia/Taipei",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

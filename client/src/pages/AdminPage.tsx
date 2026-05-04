@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { formatDateInTaipei, formatDateTimeInTaipei, getDateKeyInTaipei } from "@/lib/dateHelpers";
 import { redirectToAdminDashboardAfterLogin } from "@/lib/adminRedirect";
 import { DEFAULT_SLOT_PRESETS, createProjectSlug } from "@/lib/adminConfig";
 import { buildBookingLinkUrlMap, filterResidentsByProject, findUnbookedResidentsForProject } from "@/lib/adminDashboard";
@@ -21,23 +22,9 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, LockKeyhole, Building2, CalendarRange, ClipboardList, Users, ArrowRightLeft, ArrowLeft, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-function formatDateTime(value: string | number | Date) {
-  return new Date(value).toLocaleString("zh-TW", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatDateOnly(value: string | number | Date) {
-  return new Date(value).toLocaleDateString("zh-TW", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-}
+const formatDateTime = formatDateTimeInTaipei;
+const formatDateOnly = formatDateInTaipei;
+const getDateKey = getDateKeyInTaipei;
 
 function formatDateTimeInput(value: string | number | Date) {
   const date = new Date(value);
@@ -301,7 +288,7 @@ export default function AdminPage() {
   const rescheduleDateOptions = useMemo(() => {
     const seen = new Set<string>();
     return rescheduleAvailability.reduce<Array<{ value: string; label: string }>>((result, slot) => {
-      const value = new Date(slot.slotDate).toISOString().slice(0, 10);
+      const value = getDateKey(slot.slotDate);
       if (seen.has(value)) return result;
       seen.add(value);
       result.push({ value, label: formatDateOnly(slot.slotDate) });
@@ -310,7 +297,7 @@ export default function AdminPage() {
   }, [rescheduleAvailability]);
   const rescheduleSlotOptions = useMemo(() => {
     if (!rescheduleForm.slotDate) return [] as typeof rescheduleAvailability;
-    return rescheduleAvailability.filter(slot => new Date(slot.slotDate).toISOString().slice(0, 10) === rescheduleForm.slotDate);
+    return rescheduleAvailability.filter(slot => getDateKey(slot.slotDate) === rescheduleForm.slotDate);
   }, [rescheduleAvailability, rescheduleForm.slotDate]);
   const isDeleting = companyDeleteMutation.isPending || projectDeleteMutation.isPending || residentDeleteMutation.isPending || linkDeleteMutation.isPending || slotDeleteMutation.isPending;
 
@@ -359,7 +346,7 @@ export default function AdminPage() {
       companyId: String(slot.companyId),
       projectId: String(slot.projectId),
       linkId: String(slot.linkId ?? ""),
-      slotDate: new Date(slot.slotDate).toISOString().slice(0, 10),
+      slotDate: getDateKey(slot.slotDate),
       rangeStartDate: "",
       rangeEndDate: "",
       dateMode: "single",
@@ -383,7 +370,7 @@ export default function AdminPage() {
     setRescheduleForm({
       bookingId: String(booking.id),
       currentSlotId: String(booking.slotId),
-      slotDate: new Date(booking.slotDate).toISOString().slice(0, 10),
+      slotDate: getDateKey(booking.slotDate),
       newSlotId: "",
       note: booking.internalNote || "",
     });
@@ -462,14 +449,14 @@ export default function AdminPage() {
     const filteredLinkSlots = filterSlotsByLink(slots, slotForm.linkId);
     const duplicatePayload = validation.payloads.find(payload =>
       filteredLinkSlots.some(slot => {
-        const slotDate = new Date(slot.slotDate).toISOString().slice(0, 10);
-        const payloadDate = new Date(payload.slotDate).toISOString().slice(0, 10);
+        const slotDate = getDateKey(slot.slotDate);
+        const payloadDate = getDateKey(payload.slotDate);
         return slotDate === payloadDate && slot.startLabel === payload.startLabel && slot.endLabel === payload.endLabel;
       })
     );
 
     if (duplicatePayload) {
-      const duplicateDate = new Date(duplicatePayload.slotDate).toISOString().slice(0, 10);
+      const duplicateDate = getDateKey(duplicatePayload.slotDate);
       toast.error(`此預約連結在 ${duplicateDate} 的 ${duplicatePayload.startLabel}-${duplicatePayload.endLabel} 已存在，請先調整後再建立`);
       return;
     }

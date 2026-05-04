@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { formatDateInTaipei, formatDateTimeInTaipei, getDateKeyInTaipei } from "@/lib/dateHelpers";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,40 +13,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, CalendarDays, Building2, Phone, ShieldCheck, CircleAlert } from "lucide-react";
 import { toast } from "sonner";
 
-function resolveDateValue(dateValue: string | Date) {
-  if (typeof dateValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-    return new Date(`${dateValue}T12:00:00`);
-  }
-
-  return new Date(dateValue);
-}
-
-function formatDate(dateValue: string | Date) {
-  return resolveDateValue(dateValue).toLocaleDateString("zh-TW", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-  });
-}
-
-function formatDateTime(dateValue: string | Date) {
-  return resolveDateValue(dateValue).toLocaleString("zh-TW", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function getDateKey(dateValue: string | Date) {
-  const date = resolveDateValue(dateValue);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+const formatDate = formatDateInTaipei;
+const formatDateTime = formatDateTimeInTaipei;
+const getDateKey = getDateKeyInTaipei;
 
 function parseBookingErrorMessage(message: string) {
   try {

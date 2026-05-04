@@ -35,8 +35,8 @@ const siteContext = {
   link: {
     id: 30,
     type: "initial" as const,
-    startsAt: new Date("2026-05-01T09:00:00.000Z"),
-    endsAt: new Date("2026-05-31T18:00:00.000Z"),
+    startsAt: new Date("2026-05-01T12:00:00.000Z"),
+    endsAt: new Date("2026-05-31T12:00:00.000Z"),
   },
   availableSlots: [
     {

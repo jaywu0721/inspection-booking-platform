@@ -23,9 +23,30 @@ const { captured, fakeDb } = vi.hoisted(() => {
         internalNote: null,
         createdAtMs: 1,
         updatedAtMs: 1,
-        slotDate: new Date("2026-06-01T01:00:00.000Z"),
+        slotDate: new Date("2026-05-31T16:00:00.000Z"),
         startLabel: "09:00",
         endLabel: "10:30",
+      },
+      {
+        id: 2,
+        companyId: 10,
+        projectId: 20,
+        linkId: 77,
+        slotId: 89,
+        companyName: "測試公司",
+        projectName: "測試建案",
+        bookingType: "initial" as const,
+        unitNumberSnapshot: "A-02",
+        phoneNumberSnapshot: "0922333444",
+        gmail: "other@gmail.com",
+        hasInspectionCompany: false,
+        status: "booked" as const,
+        internalNote: null,
+        createdAtMs: 2,
+        updatedAtMs: 2,
+        slotDate: new Date("2026-06-01T16:00:00.000Z"),
+        startLabel: "10:30",
+        endLabel: "12:00",
       },
     ],
     deletes: [] as Array<{ table: unknown; condition: unknown }>,
@@ -138,6 +159,7 @@ describe("booking link cascade and filter rules", () => {
     });
 
     expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe(1);
     expect(captured.searchWhere).toMatchObject({ type: "and" });
 
     const conditions = (captured.searchWhere as { type: string; conditions: Array<any> }).conditions;
@@ -150,7 +172,6 @@ describe("booking link cascade and filter rules", () => {
         expect.objectContaining({ type: "eq", left: bookings.status, right: "booked" }),
       ])
     );
-    expect(conditions.some(condition => condition?.type === "sql")).toBe(true);
   });
 
   it("deletes reschedules, bookings, slots and the link in order when a booking link is removed", async () => {

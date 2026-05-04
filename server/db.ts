@@ -520,7 +520,13 @@ export async function createBookingRecord(input: PublicSiteLinkInput & {
       .limit(1);
 
     if (existing) {
-      const reservedDate = new Date(existing.slotDate).toISOString().slice(0, 10);
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Taipei",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(new Date(existing.slotDate));
+      const reservedDate = `${parts.find(part => part.type === "year")?.value}-${parts.find(part => part.type === "month")?.value}-${parts.find(part => part.type === "day")?.value}`;
       throw new Error(`你已預約 ${reservedDate} ${existing.startLabel}-${existing.endLabel}，不得重複預約`);
     }
 
@@ -876,9 +882,15 @@ export async function searchBookings(filters: {
   if (filters.unitNumber) conditions.push(like(bookings.unitNumberSnapshot, `%${filters.unitNumber}%`));
   if (filters.bookingType) conditions.push(eq(bookings.bookingType, filters.bookingType));
   if (filters.status) conditions.push(eq(bookings.status, filters.status));
-  if (filters.bookingDate) conditions.push(sql`DATE(${bookingSlots.slotDate}) = ${filters.bookingDate}`);
 
-  return db
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  const rows = await db
     .select({
       id: bookings.id,
       companyId: bookings.companyId,
@@ -906,6 +918,18 @@ export async function searchBookings(filters: {
     .innerJoin(bookingSlots, eq(bookingSlots.id, bookings.slotId))
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(asc(bookingSlots.slotDate), asc(bookingSlots.startLabel), asc(bookingSlots.endLabel), asc(bookings.id));
+
+  if (!filters.bookingDate) {
+    return rows;
+  }
+
+  return rows.filter(row => {
+    const parts = formatter.formatToParts(new Date(row.slotDate));
+    const year = parts.find(part => part.type === "year")?.value;
+    const month = parts.find(part => part.type === "month")?.value;
+    const day = parts.find(part => part.type === "day")?.value;
+    return `${year}-${month}-${day}` === filters.bookingDate;
+  });
 }
 
 export async function getAdminRescheduleAvailability(bookingId: number) {

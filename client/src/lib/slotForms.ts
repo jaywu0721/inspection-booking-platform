@@ -53,27 +53,40 @@ function parseCapacity(capacityValue: string) {
   return { ok: true as const, capacity };
 }
 
+function createStableSlotDate(dateInput: string) {
+  const [yearText, monthText, dayText] = dateInput.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return new Date(Number.NaN);
+  }
+
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+}
+
 function enumerateDateRange(startDate: string, endDate: string) {
   if (!startDate || !endDate) {
     return { ok: false as const, message: "請先完整選擇日期區間" };
   }
 
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${endDate}T00:00:00`);
+  const start = createStableSlotDate(startDate);
+  const end = createStableSlotDate(endDate);
 
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     return { ok: false as const, message: "日期區間格式不正確" };
   }
 
-  if (start > end) {
+  if (start.getTime() > end.getTime()) {
     return { ok: false as const, message: "日期區間的開始日期不能晚於結束日期" };
   }
 
   const result: Date[] = [];
   const cursor = new Date(start);
-  while (cursor <= end) {
+  while (cursor.getTime() <= end.getTime()) {
     result.push(new Date(cursor));
-    cursor.setDate(cursor.getDate() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
   return { ok: true as const, dates: result };
@@ -139,7 +152,7 @@ export function validateSingleSlotForm(input: SlotFormInput) {
     payload: {
       id: Number.isInteger(parsedId) && parsedId > 0 ? parsedId : undefined,
       linkId: Number(input.linkId),
-      slotDate: new Date(input.slotDate),
+      slotDate: createStableSlotDate(input.slotDate),
       startLabel: input.startLabel.trim(),
       endLabel: input.endLabel.trim(),
       capacity: capacityResult.capacity,
@@ -166,7 +179,7 @@ export function buildPresetSlotPayloads(
     dateMode === "range"
       ? enumerateDateRange(input.rangeStartDate || "", input.rangeEndDate || "")
       : input.slotDate
-        ? { ok: true as const, dates: [new Date(input.slotDate)] }
+        ? { ok: true as const, dates: [createStableSlotDate(input.slotDate)] }
         : { ok: false as const, message: "請先選擇時段日期" };
 
   if (!dateResult.ok) {

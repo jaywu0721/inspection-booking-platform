@@ -19,7 +19,7 @@ describe("slot date mode helpers", () => {
     if (!result.ok) return;
     expect(result.payload.linkId).toBe(30);
     expect(result.payload.capacity).toBe(2);
-    expect(result.payload.slotDate.toISOString().slice(0, 10)).toBe("2026-05-12");
+    expect(result.payload.slotDate.toISOString()).toBe("2026-05-12T12:00:00.000Z");
   });
 
   it("builds preset payloads for every date inside the selected date range", () => {
@@ -42,13 +42,13 @@ describe("slot date mode helpers", () => {
     if (!result.ok) return;
 
     expect(result.payloads).toHaveLength(6);
-    expect(result.payloads.map(payload => payload.slotDate.toISOString().slice(0, 10))).toEqual([
-      "2026-05-10",
-      "2026-05-11",
-      "2026-05-12",
-      "2026-05-10",
-      "2026-05-11",
-      "2026-05-12",
+    expect(result.payloads.map(payload => payload.slotDate.toISOString())).toEqual([
+      "2026-05-10T12:00:00.000Z",
+      "2026-05-11T12:00:00.000Z",
+      "2026-05-12T12:00:00.000Z",
+      "2026-05-10T12:00:00.000Z",
+      "2026-05-11T12:00:00.000Z",
+      "2026-05-12T12:00:00.000Z",
     ]);
   });
 
