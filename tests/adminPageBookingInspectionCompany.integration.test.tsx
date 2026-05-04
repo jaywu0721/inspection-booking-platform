@@ -13,8 +13,16 @@ const { dashboardData, searchBookingsUseQuery } = vi.hoisted(() => ({
       { id: 31, companyId: 10, projectId: 20, type: "reinspect" as const, isEnabled: false },
     ],
     slots: [],
-    residents: [],
-    bookings: [],
+    residents: [
+      { id: 201, projectId: 20, unitNumber: "12F-1", phoneNumber: "0912000001", note: "已預約" },
+      { id: 202, projectId: 20, unitNumber: "12F-2", phoneNumber: "0912000002", note: "尚未預約" },
+      { id: 203, projectId: 20, unitNumber: "12F-3", phoneNumber: "0912000003", note: "已取消後未補約" },
+      { id: 204, projectId: 20, unitNumber: " 12f-2 ", phoneNumber: "0912000004", note: "同戶第二聯絡人" },
+    ],
+    bookings: [
+      { id: 1, projectId: 20, unitNumberSnapshot: "12F-1", status: "booked" },
+      { id: 2, projectId: 20, unitNumberSnapshot: "12F-3", status: "cancelled" },
+    ],
     reschedules: [],
   },
   searchBookingsUseQuery: vi.fn(),
@@ -167,5 +175,24 @@ describe("AdminPage booking inspection company integration", () => {
     expect(bookingTable).toBeTruthy();
     expect(within(bookingTable as HTMLElement).getByText("12F-1")).toBeTruthy();
     expect(within(bookingTable as HTMLElement).queryByText("12F-2")).toBeNull();
+  });
+
+  it("shows unbooked residents for the selected project when the admin clicks the shortcut button", () => {
+    render(<AdminPage />);
+
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[0], { target: { value: "20" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "查看未完成預約住戶" })[0]);
+
+    expect(screen.getByText("2 戶未完成")).toBeTruthy();
+
+    const unbookedTable = screen
+      .getAllByRole("table")
+      .find(table => within(table).queryByText("備註") && within(table).queryByText("尚未預約"));
+
+    expect(unbookedTable).toBeTruthy();
+    expect(within(unbookedTable as HTMLElement).getAllByText("12F-2").length).toBe(1);
+    expect(within(unbookedTable as HTMLElement).getByText("12F-3")).toBeTruthy();
+    expect(within(unbookedTable as HTMLElement).queryByText("12F-1")).toBeNull();
   });
 });

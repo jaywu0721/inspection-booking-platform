@@ -186,14 +186,16 @@ export default function Home() {
 
   const scrollToSlotSelectionStep = () => {
     window.requestAnimationFrame(() => {
-      slotSelectionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.requestAnimationFrame(() => {
+        slotSelectionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     });
   };
 
   const handleDateSelection = (dateKey: string) => {
     setSelectedSlotDate(dateKey);
     setSlotId(null);
-    void siteQuery.refetch();
+    void siteQuery.refetch?.();
     scrollToSlotSelectionStep();
   };
 
@@ -317,6 +319,10 @@ export default function Home() {
 
   const company = site.company;
   const project = site.project;
+  const displayedPrecautions = company.precautions.replace(
+    "改期限制： 為確保每位住戶的權益與工班排程，本系統不開放自行改期，請見諒。",
+    "改期限制：連結開放時間內可自行改期；若該案未開放改期作業或連結已截止，請自行聯絡公司。"
+  );
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f4f1ea_0%,#ffffff_38%,#f8f7f4_100%)] text-foreground">
@@ -416,7 +422,7 @@ export default function Home() {
                 <CardTitle>驗屋注意事項</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="whitespace-pre-line leading-7 text-muted-foreground">{company.precautions}</p>
+                <p className="whitespace-pre-line leading-7 text-muted-foreground">{displayedPrecautions}</p>
               </CardContent>
             </Card>
 
@@ -661,8 +667,7 @@ export default function Home() {
                                             key={dateOption.key}
                                             type="button"
                                             onClick={() => {
-                                              setSelectedSlotDate(dateOption.key);
-                                              setSlotId(null);
+                                              handleDateSelection(dateOption.key);
                                             }}
                                             className={`w-full rounded-2xl border p-4 text-left transition ${isSelectedDate ? "border-primary bg-primary/5 shadow-sm" : "border-border/80 hover:border-primary/40"}`}
                                           >

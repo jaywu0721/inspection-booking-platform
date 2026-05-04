@@ -4,10 +4,12 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createBookingMutateAsync, toastSuccess, toastError } = vi.hoisted(() => ({
+const { createBookingMutateAsync, toastSuccess, toastError, getContextRefetch, scrollIntoViewMock } = vi.hoisted(() => ({
   createBookingMutateAsync: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
+  getContextRefetch: vi.fn(async () => ({ data: siteContext })),
+  scrollIntoViewMock: vi.fn(),
 }));
 
 const siteContext = {
@@ -69,7 +71,7 @@ vi.mock("../client/src/lib/trpc", () => ({
   trpc: {
     publicSite: {
       getContext: {
-        useQuery: () => ({ data: siteContext, isLoading: false, error: null }),
+        useQuery: () => ({ data: siteContext, isLoading: false, error: null, refetch: getContextRefetch }),
       },
       verifyResident: {
         useMutation: (options?: { onSuccess?: (result: typeof verificationResult) => void; onError?: (error: Error) => void }) => ({
@@ -106,7 +108,10 @@ describe("Home booking email rules", () => {
     createBookingMutateAsync.mockReset();
     toastSuccess.mockReset();
     toastError.mockReset();
+    getContextRefetch.mockClear();
+    scrollIntoViewMock.mockClear();
     window.history.replaceState({}, "", "/?link=demo-link-token");
+    HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
   });
 
   async function prepareBookingForm() {
@@ -156,6 +161,25 @@ describe("Home booking email rules", () => {
           gmail: "owner@yahoo.com",
         })
       );
+    });
+  });
+
+  it("scrolls to step two and refetches availability after choosing a date for a new booking", async () => {
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("標準戶號"), { target: { value: "A1-01" } });
+    fireEvent.change(screen.getByLabelText("手機號碼"), { target: { value: "0912345678" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "進行住戶驗證" })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText("驗證成功")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByText("點選後顯示該日期可預約時段")[0].closest("button") as HTMLElement);
+
+    await waitFor(() => {
+      expect(getContextRefetch).toHaveBeenCalled();
+      expect(scrollIntoViewMock).toHaveBeenCalled();
     });
   });
 });

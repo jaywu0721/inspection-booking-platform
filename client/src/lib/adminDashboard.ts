@@ -13,6 +13,13 @@ export type DashboardCompanySource = {
 
 export type DashboardResidentSource = {
   projectId: number;
+  unitNumber: string;
+};
+
+export type DashboardBookingSource = {
+  projectId: number;
+  unitNumberSnapshot: string;
+  status?: string | null;
 };
 
 export function filterResidentsByProject<T extends DashboardResidentSource>(residents: T[], projectId: string) {
@@ -22,6 +29,47 @@ export function filterResidentsByProject<T extends DashboardResidentSource>(resi
   }
 
   return residents.filter(resident => resident.projectId === parsedProjectId);
+}
+
+function normalizeUnitNumber(unitNumber: string) {
+  return unitNumber.trim().toUpperCase();
+}
+
+export function findUnbookedResidentsForProject<
+  TResident extends DashboardResidentSource,
+  TBooking extends DashboardBookingSource,
+>(input: {
+  residents: TResident[];
+  bookings: TBooking[];
+  projectId: string;
+}) {
+  const parsedProjectId = Number(input.projectId);
+  if (!Number.isInteger(parsedProjectId) || parsedProjectId <= 0) {
+    return [] as TResident[];
+  }
+
+  const bookedUnitNumbers = new Set(
+    input.bookings
+      .filter(booking => booking.projectId === parsedProjectId && booking.status !== "cancelled")
+      .map(booking => normalizeUnitNumber(booking.unitNumberSnapshot))
+  );
+
+  const uniqueResidentsByUnitNumber = new Map<string, TResident>();
+
+  for (const resident of input.residents) {
+    if (resident.projectId !== parsedProjectId) {
+      continue;
+    }
+
+    const normalizedUnitNumber = normalizeUnitNumber(resident.unitNumber);
+    if (bookedUnitNumbers.has(normalizedUnitNumber) || uniqueResidentsByUnitNumber.has(normalizedUnitNumber)) {
+      continue;
+    }
+
+    uniqueResidentsByUnitNumber.set(normalizedUnitNumber, resident);
+  }
+
+  return Array.from(uniqueResidentsByUnitNumber.values());
 }
 
 export function buildBookingLinkUrl(input: {

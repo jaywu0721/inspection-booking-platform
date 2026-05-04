@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { redirectToAdminDashboardAfterLogin } from "@/lib/adminRedirect";
 import { DEFAULT_SLOT_PRESETS, createProjectSlug } from "@/lib/adminConfig";
-import { buildBookingLinkUrlMap, filterResidentsByProject } from "@/lib/adminDashboard";
+import { buildBookingLinkUrlMap, filterResidentsByProject, findUnbookedResidentsForProject } from "@/lib/adminDashboard";
 import { getProjectsForCompany, parsePositiveId, validateResidentForm } from "@/lib/adminForms";
 import { buildPresetSlotPayloads, createEditableSlotPresets, createEmptySlotForm, filterSlotsByLink, getLinksForProject, validateSingleSlotForm } from "@/lib/slotForms";
 import { validateBookingLinkForm } from "@/lib/linkForm";
@@ -96,6 +96,7 @@ export default function AdminPage() {
   const [selectedSlotLinkId, setSelectedSlotLinkId] = useState("");
   const [editableSlotPresets, setEditableSlotPresets] = useState(createEditableSlotPresets());
   const [bookingFilters, setBookingFilters] = useState({ projectId: "", linkId: "", unitNumber: "", bookingType: "all", status: "all", bookingDate: "" });
+  const [showUnbookedResidents, setShowUnbookedResidents] = useState(false);
   const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "" });
   const [residentListProjectId, setResidentListProjectId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link" | "slot"; id: number; label: string; step: 1 | 2 }>(null);
@@ -135,6 +136,7 @@ export default function AdminPage() {
   const slots = dashboardQuery.data?.slots ?? [];
   const residents = dashboardQuery.data?.residents ?? [];
   const bookings = bookingQuery.data ?? [];
+  const dashboardBookings = dashboardQuery.data?.bookings ?? [];
 
   const loginMutation = trpc.adminAuth.login.useMutation({
     onSuccess: async () => {
@@ -281,6 +283,10 @@ export default function AdminPage() {
   const slotProjectOptions = useMemo(() => getProjectsForCompany(projects, slotForm.companyId), [projects, slotForm.companyId]);
   const slotLinkOptions = useMemo(() => getLinksForProject(links, slotForm.projectId), [links, slotForm.projectId]);
   const bookingFilterLinkOptions = useMemo(() => getLinksForProject(links, bookingFilters.projectId), [links, bookingFilters.projectId]);
+  const unbookedResidents = useMemo(
+    () => findUnbookedResidentsForProject({ residents, bookings: dashboardBookings, projectId: bookingFilters.projectId }),
+    [residents, dashboardBookings, bookingFilters.projectId]
+  );
   const projectNameById = useMemo(() => new Map(projects.map(project => [project.id, project.name])), [projects]);
   const filteredResidents = useMemo(() => filterResidentsByProject(residents, residentListProjectId), [residents, residentListProjectId]);
   const filteredSlots = useMemo(() => filterSlotsByLink(slots, selectedSlotLinkId || slotForm.linkId), [slots, selectedSlotLinkId, slotForm.linkId]);
@@ -865,6 +871,59 @@ export default function AdminPage() {
                     <div className="space-y-2"><Label>類型</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={bookingFilters.bookingType} onChange={event => setBookingFilters(current => ({ ...current, bookingType: event.target.value }))}><option value="all">全部</option><option value="initial">初驗</option><option value="reinspect">複驗</option></select></div>
                     <div className="space-y-2"><Label>狀態</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={bookingFilters.status} onChange={event => setBookingFilters(current => ({ ...current, status: event.target.value }))}><option value="all">全部</option><option value="booked">booked</option><option value="rescheduled">rescheduled</option><option value="cancelled">cancelled</option></select></div>
                     <div className="space-y-2"><Label>預約日期</Label><Input type="date" value={bookingFilters.bookingDate} onChange={event => setBookingFilters(current => ({ ...current, bookingDate: event.target.value }))} /></div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>未完成預約住戶</CardTitle>
+                    <CardDescription>這個按鈕只以你選定的建案為準，比對該建案住戶主檔與未取消的預約紀錄。若你沒先選建案，結果一定不準。</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          if (!bookingFilters.projectId) {
+                            toast.error("請先選擇建案，再查看未完成預約住戶");
+                            return;
+                          }
+                          setShowUnbookedResidents(current => !current);
+                        }}
+                      >
+                        {showUnbookedResidents ? "隱藏未完成預約住戶" : "查看未完成預約住戶"}
+                      </Button>
+                      {bookingFilters.projectId ? <Badge variant="secondary">{unbookedResidents.length} 戶未完成</Badge> : null}
+                    </div>
+                    {showUnbookedResidents && bookingFilters.projectId ? (
+                      unbookedResidents.length ? (
+                        <div className="overflow-x-auto rounded-2xl border border-border/70">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>建案</TableHead>
+                                <TableHead>戶號</TableHead>
+                                <TableHead>手機</TableHead>
+                                <TableHead>備註</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {unbookedResidents.map(resident => (
+                                <TableRow key={resident.id}>
+                                  <TableCell>{projectNameById.get(resident.projectId) || `建案 ${resident.projectId}`}</TableCell>
+                                  <TableCell>{resident.unitNumber}</TableCell>
+                                  <TableCell>{resident.phoneNumber}</TableCell>
+                                  <TableCell>{resident.note || "-"}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">目前所選建案的住戶都已有未取消的預約紀錄。</div>
+                      )
+                    ) : null}
                   </CardContent>
                 </Card>
 
