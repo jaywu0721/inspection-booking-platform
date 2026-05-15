@@ -10,6 +10,7 @@ import { buildCompanyFormFromRecord, createEmptyCompanyForm } from "@/lib/compan
 import { useRescheduleAvailabilitySync } from "@/hooks/useRescheduleAvailabilitySync";
 import { trpc } from "@/lib/trpc";
 import { AdminRescheduleFields } from "@/components/AdminRescheduleFields";
+import { AdminAssistedBookingFields } from "@/components/AdminAssistedBookingFields";
 import { AdminBookingRecordsTable } from "@/components/AdminBookingRecordsTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,6 +86,7 @@ export default function AdminPage() {
   const [bookingFilters, setBookingFilters] = useState({ projectId: "", linkId: "", unitNumber: "", bookingType: "all", status: "all", bookingDate: "" });
   const [showUnbookedResidents, setShowUnbookedResidents] = useState(false);
   const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "" });
+  const [assistedBookingForm, setAssistedBookingForm] = useState({ residentId: "", linkId: "", slotDate: "", slotId: "", note: "", gmail: "", hasInspectionCompany: false });
   const [residentListProjectId, setResidentListProjectId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link" | "slot"; id: number; label: string; step: 1 | 2 }>(null);
 
@@ -117,6 +119,14 @@ export default function AdminPage() {
     }
   );
 
+  const bookingAvailabilityQuery = trpc.admin.bookingAvailability.useQuery(
+    { linkId: Number(assistedBookingForm.linkId) },
+    {
+      enabled: Boolean(adminProfile.data && assistedBookingForm.linkId),
+      refetchOnWindowFocus: false,
+    }
+  );
+
   const companies = dashboardQuery.data?.companies ?? [];
   const projects = dashboardQuery.data?.projects ?? [];
   const links = dashboardQuery.data?.links ?? [];
@@ -144,6 +154,7 @@ export default function AdminPage() {
     await Promise.all([
       utils.admin.dashboard.invalidate(),
       utils.admin.searchBookings.invalidate(),
+      utils.admin.bookingAvailability.invalidate(),
       utils.admin.rescheduleAvailability.invalidate(),
       adminProfile.refetch(),
     ]);
@@ -217,6 +228,15 @@ export default function AdminPage() {
     onError: error => toast.error(error.message),
   });
 
+  const createBookingMutation = trpc.admin.createBooking.useMutation({
+    onSuccess: async () => {
+      toast.success("已完成代客預約，住戶將移出未完成名單");
+      await refreshAll();
+      setAssistedBookingForm({ residentId: "", linkId: "", slotDate: "", slotId: "", note: "", gmail: "", hasInspectionCompany: false });
+    },
+    onError: error => toast.error(error.message),
+  });
+
   const companyDeleteMutation = trpc.admin.deleteCompany.useMutation({
     onSuccess: async () => {
       toast.success("公司資料已刪除");
@@ -279,12 +299,22 @@ export default function AdminPage() {
   const filteredSlots = useMemo(() => filterSlotsByLink(slots, selectedSlotLinkId || slotForm.linkId), [slots, selectedSlotLinkId, slotForm.linkId]);
   const bookingLinkUrlById = useMemo(() => buildBookingLinkUrlMap({ origin: window.location.origin, companies, projects, links }), [companies, projects, links]);
   const editingBooking = useMemo(() => bookings.find(booking => String(booking.id) === rescheduleForm.bookingId) ?? null, [bookings, rescheduleForm.bookingId]);
+  const editingAssistedBookingResident = useMemo(
+    () => unbookedResidents.find(resident => String(resident.id) === assistedBookingForm.residentId) ?? null,
+    [unbookedResidents, assistedBookingForm.residentId]
+  );
   const { syncOnDropdownOpen: syncRescheduleAvailability } = useRescheduleAvailabilitySync({
-    bookingId: rescheduleForm.bookingId,
+    resourceId: rescheduleForm.bookingId,
     slotDate: rescheduleForm.slotDate,
     refetch: rescheduleAvailabilityQuery.refetch,
   });
+  const { syncOnDropdownOpen: syncAssistedBookingAvailability } = useRescheduleAvailabilitySync({
+    resourceId: assistedBookingForm.linkId,
+    slotDate: assistedBookingForm.slotDate,
+    refetch: bookingAvailabilityQuery.refetch,
+  });
   const rescheduleAvailability = rescheduleAvailabilityQuery.data ?? [];
+  const assistedBookingAvailability = bookingAvailabilityQuery.data ?? [];
   const rescheduleDateOptions = useMemo(() => {
     const seen = new Set<string>();
     return rescheduleAvailability.reduce<Array<{ value: string; label: string }>>((result, slot) => {
@@ -299,6 +329,20 @@ export default function AdminPage() {
     if (!rescheduleForm.slotDate) return [] as typeof rescheduleAvailability;
     return rescheduleAvailability.filter(slot => getDateKey(slot.slotDate) === rescheduleForm.slotDate);
   }, [rescheduleAvailability, rescheduleForm.slotDate]);
+  const assistedBookingDateOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return assistedBookingAvailability.reduce<Array<{ value: string; label: string }>>((result, slot) => {
+      const value = getDateKey(slot.slotDate);
+      if (seen.has(value)) return result;
+      seen.add(value);
+      result.push({ value, label: formatDateOnly(slot.slotDate) });
+      return result;
+    }, []);
+  }, [assistedBookingAvailability]);
+  const assistedBookingSlotOptions = useMemo(() => {
+    if (!assistedBookingForm.slotDate) return [] as typeof assistedBookingAvailability;
+    return assistedBookingAvailability.filter(slot => getDateKey(slot.slotDate) === assistedBookingForm.slotDate);
+  }, [assistedBookingAvailability, assistedBookingForm.slotDate]);
   const isDeleting = companyDeleteMutation.isPending || projectDeleteMutation.isPending || residentDeleteMutation.isPending || linkDeleteMutation.isPending || slotDeleteMutation.isPending;
 
   useEffect(() => {
@@ -306,6 +350,12 @@ export default function AdminPage() {
     if (bookingFilterLinkOptions.some(link => String(link.id) === bookingFilters.linkId)) return;
     setBookingFilters(current => ({ ...current, linkId: "" }));
   }, [bookingFilterLinkOptions, bookingFilters.linkId]);
+
+  useEffect(() => {
+    if (!assistedBookingForm.residentId) return;
+    if (bookingFilters.linkId && assistedBookingForm.linkId === bookingFilters.linkId) return;
+    setAssistedBookingForm({ residentId: "", linkId: "", slotDate: "", slotId: "", note: "", gmail: "", hasInspectionCompany: false });
+  }, [bookingFilters.linkId, assistedBookingForm.residentId, assistedBookingForm.linkId]);
 
   const startEditingCompany = (company: typeof companies[number]) => {
     setCompanyForm(buildCompanyFormFromRecord(company));
@@ -380,6 +430,27 @@ export default function AdminPage() {
     setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "" });
   };
 
+  const startAssistedBooking = (resident: typeof unbookedResidents[number]) => {
+    if (!bookingFilters.linkId) {
+      toast.error("請先選擇預約連結，再進行代客預約");
+      return;
+    }
+
+    setAssistedBookingForm({
+      residentId: String(resident.id),
+      linkId: bookingFilters.linkId,
+      slotDate: "",
+      slotId: "",
+      note: "",
+      gmail: "",
+      hasInspectionCompany: false,
+    });
+  };
+
+  const cancelAssistedBooking = () => {
+    setAssistedBookingForm({ residentId: "", linkId: "", slotDate: "", slotId: "", note: "", gmail: "", hasInspectionCompany: false });
+  };
+
   useEffect(() => {
     if (!rescheduleForm.newSlotId) return;
 
@@ -388,6 +459,41 @@ export default function AdminPage() {
 
     setRescheduleForm(current => ({ ...current, newSlotId: "" }));
   }, [rescheduleForm.newSlotId, rescheduleSlotOptions]);
+
+  useEffect(() => {
+    if (!assistedBookingForm.slotId) return;
+
+    const selectedSlot = assistedBookingSlotOptions.find(slot => String(slot.id) === assistedBookingForm.slotId);
+    if (selectedSlot && selectedSlot.remaining > 0) return;
+
+    setAssistedBookingForm(current => ({ ...current, slotId: "" }));
+  }, [assistedBookingForm.slotId, assistedBookingSlotOptions]);
+
+  const submitAssistedBooking = () => {
+    if (!bookingFilters.linkId) {
+      toast.error("請先選擇預約連結，再進行代客預約");
+      return;
+    }
+
+    if (!assistedBookingForm.residentId || !editingAssistedBookingResident) {
+      toast.error("請先選擇要代客預約的住戶");
+      return;
+    }
+
+    if (!assistedBookingForm.slotDate || !assistedBookingForm.slotId) {
+      toast.error("請選擇預約日期與時段");
+      return;
+    }
+
+    createBookingMutation.mutate({
+      linkId: Number(bookingFilters.linkId),
+      residentId: Number(assistedBookingForm.residentId),
+      slotId: Number(assistedBookingForm.slotId),
+      note: assistedBookingForm.note || undefined,
+      gmail: assistedBookingForm.gmail,
+      hasInspectionCompany: assistedBookingForm.hasInspectionCompany,
+    });
+  };
 
   const saveResident = () => {
     const validationMessage = validateResidentForm(residentForm, projects);
@@ -886,7 +992,7 @@ export default function AdminPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>未完成預約住戶</CardTitle>
-                    <CardDescription>這個按鈕只以你選定的建案為準，比對該建案住戶主檔與未取消的預約紀錄。若你沒先選建案，結果一定不準。</CardDescription>
+                    <CardDescription>這個清單只以你選定的建案為準，比對該建案住戶主檔與未取消的預約紀錄。若你要直接代客預約，必須先在上方選好預約連結，系統才知道要沿用哪一條 link 與哪組時段名額。</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex flex-wrap items-center gap-3">
@@ -915,16 +1021,52 @@ export default function AdminPage() {
                                 <TableHead>戶號</TableHead>
                                 <TableHead>手機</TableHead>
                                 <TableHead>備註</TableHead>
+                                <TableHead className="text-right">操作</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {unbookedResidents.map(resident => (
-                                <TableRow key={resident.id}>
-                                  <TableCell>{projectNameById.get(resident.projectId) || `建案 ${resident.projectId}`}</TableCell>
-                                  <TableCell>{resident.unitNumber}</TableCell>
-                                  <TableCell>{resident.phoneNumber}</TableCell>
-                                  <TableCell>{resident.note || "-"}</TableCell>
-                                </TableRow>
+                                <React.Fragment key={resident.id}>
+                                  <TableRow>
+                                    <TableCell>{projectNameById.get(resident.projectId) || `建案 ${resident.projectId}`}</TableCell>
+                                    <TableCell>{resident.unitNumber}</TableCell>
+                                    <TableCell>{resident.phoneNumber}</TableCell>
+                                    <TableCell>{resident.note || "-"}</TableCell>
+                                    <TableCell className="text-right">
+                                      <Button variant="outline" size="sm" onClick={() => startAssistedBooking(resident)}>
+                                        {assistedBookingForm.residentId === String(resident.id) ? "代客預約中" : "代客預約"}
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                  {assistedBookingForm.residentId === String(resident.id) ? (
+                                    <TableRow>
+                                      <TableCell colSpan={5} className="bg-muted/20">
+                                        <AdminAssistedBookingFields
+                                          slotDate={assistedBookingForm.slotDate}
+                                          slotId={assistedBookingForm.slotId}
+                                          note={assistedBookingForm.note}
+                                          gmail={assistedBookingForm.gmail}
+                                          hasInspectionCompany={assistedBookingForm.hasInspectionCompany}
+                                          dateOptions={assistedBookingDateOptions}
+                                          slotOptions={assistedBookingSlotOptions}
+                                          isFetching={bookingAvailabilityQuery.isFetching}
+                                          errorMessage={bookingAvailabilityQuery.error?.message}
+                                          isSubmitting={createBookingMutation.isPending}
+                                          onChangeDate={slotDate => setAssistedBookingForm(current => ({ ...current, slotDate, slotId: "" }))}
+                                          onChangeSlot={slotId => setAssistedBookingForm(current => ({ ...current, slotId }))}
+                                          onChangeNote={note => setAssistedBookingForm(current => ({ ...current, note }))}
+                                          onChangeGmail={gmail => setAssistedBookingForm(current => ({ ...current, gmail }))}
+                                          onChangeHasInspectionCompany={hasInspectionCompany =>
+                                            setAssistedBookingForm(current => ({ ...current, hasInspectionCompany }))
+                                          }
+                                          onSyncAvailability={syncAssistedBookingAvailability}
+                                          onSubmit={submitAssistedBooking}
+                                          onCancel={cancelAssistedBooking}
+                                        />
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : null}
+                                </React.Fragment>
                               ))}
                             </TableBody>
                           </Table>

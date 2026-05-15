@@ -406,6 +406,195 @@ export async function getPublicSiteContext(input: PublicSiteLinkInput) {
   };
 }
 
+async function getAdminLinkContext(linkId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const [row] = await db
+    .select({
+      company: companies,
+      project: projects,
+      link: bookingLinks,
+    })
+    .from(bookingLinks)
+    .innerJoin(companies, eq(companies.id, bookingLinks.companyId))
+    .innerJoin(projects, eq(projects.id, bookingLinks.projectId))
+    .where(eq(bookingLinks.id, linkId))
+    .limit(1);
+
+  if (!row) {
+    throw new Error("找不到對應的預約連結");
+  }
+
+  const now = new Date();
+
+  return {
+    company: row.company,
+    project: row.project,
+    link: row.link,
+    isExpired: !row.link.isEnabled || row.link.startsAt > now || row.link.endsAt < now,
+  };
+}
+
+export async function getAdminBookingAvailability(linkId: number) {
+  const site = await getAdminLinkContext(linkId);
+  if (site.isExpired) {
+    throw new Error("此預約連結已截止");
+  }
+
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const slotRows = await db
+    .select()
+    .from(bookingSlots)
+    .where(and(eq(bookingSlots.linkId, site.link.id), eq(bookingSlots.isActive, true)))
+    .orderBy(asc(bookingSlots.slotDate), asc(bookingSlots.startLabel), asc(bookingSlots.endLabel));
+
+  if (slotRows.length === 0) {
+    return [] as Array<(typeof slotRows)[number] & { remaining: number; isCurrentSlot: boolean }>;
+  }
+
+  const usageRows = await db
+    .select({ slotId: bookings.slotId, used: count(bookings.id) })
+    .from(bookings)
+    .where(and(inArray(bookings.slotId, slotRows.map(slot => slot.id)), sql`${bookings.status} <> 'cancelled'`))
+    .groupBy(bookings.slotId);
+
+  const usageBySlotId = new Map(usageRows.map(item => [item.slotId, Number(item.used)]));
+
+  return buildRescheduleAvailability(slotRows, usageBySlotId, -1);
+}
+
+function formatReservedDate(slotDate: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(slotDate));
+
+  return `${parts.find(part => part.type === "year")?.value}-${parts.find(part => part.type === "month")?.value}-${parts.find(part => part.type === "day")?.value}`;
+}
+
+function buildExistingBookingErrorMessage(existing: {
+  slotDate: Date;
+  startLabel: string;
+  endLabel: string;
+}, source: "public" | "admin") {
+  const reservedDate = formatReservedDate(existing.slotDate);
+  if (source === "admin") {
+    return `此住戶已預約 ${reservedDate} ${existing.startLabel}-${existing.endLabel}，請改用編輯改期`;
+  }
+
+  return `你已預約 ${reservedDate} ${existing.startLabel}-${existing.endLabel}，不得重複預約`;
+}
+
+async function createBookingRecordForSite(input: {
+  company: { id: number };
+  project: { id: number };
+  link: { id: number; type: "initial" | "reinspect" };
+  isExpired: boolean;
+  residentId: number;
+  slotId: number;
+  gmail: string;
+  hasInspectionCompany: boolean;
+  internalNote?: string | null;
+  duplicateSource: "public" | "admin";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  if (input.isExpired) {
+    throw new Error("此預約連結已截止");
+  }
+
+  const [resident] = await db.select().from(residents).where(eq(residents.id, input.residentId)).limit(1);
+  if (!resident) {
+    throw new Error("住戶資料不存在");
+  }
+
+  if (resident.projectId !== input.project.id || resident.companyId !== input.company.id) {
+    throw new Error("此住戶不屬於目前建案，不能使用這個預約連結");
+  }
+
+  const [slot] = await db
+    .select()
+    .from(bookingSlots)
+    .where(and(eq(bookingSlots.id, input.slotId), eq(bookingSlots.projectId, input.project.id), eq(bookingSlots.linkId, input.link.id), eq(bookingSlots.isActive, true)))
+    .limit(1);
+
+  if (!slot) {
+    throw new Error("選擇的時段不存在或已停用");
+  }
+
+  return db.transaction(async tx => {
+    const [existing] = await tx
+      .select({
+        id: bookings.id,
+        slotDate: bookingSlots.slotDate,
+        startLabel: bookingSlots.startLabel,
+        endLabel: bookingSlots.endLabel,
+      })
+      .from(bookings)
+      .innerJoin(bookingSlots, eq(bookingSlots.id, bookings.slotId))
+      .where(
+        and(
+          eq(bookings.linkId, input.link.id),
+          eq(bookings.unitNumberSnapshot, resident.unitNumber),
+          sql`${bookings.status} <> 'cancelled'`
+        )
+      )
+      .limit(1);
+
+    if (existing) {
+      throw new Error(buildExistingBookingErrorMessage(existing, input.duplicateSource));
+    }
+
+    await lockRowForUpdate(tx as { execute?: (query: unknown) => Promise<unknown> }, "bookingSlots", slot.id);
+
+    const [lockedSlot] = await tx
+      .select()
+      .from(bookingSlots)
+      .where(and(eq(bookingSlots.id, slot.id), eq(bookingSlots.projectId, input.project.id), eq(bookingSlots.linkId, input.link.id), eq(bookingSlots.isActive, true)))
+      .limit(1);
+
+    if (!lockedSlot) {
+      throw new Error("選擇的時段不存在或已停用");
+    }
+
+    const [slotUsage] = await tx
+      .select({ used: count(bookings.id) })
+      .from(bookings)
+      .where(and(eq(bookings.slotId, lockedSlot.id), sql`${bookings.status} <> 'cancelled'`));
+
+    const used = Number(slotUsage?.used ?? 0);
+    if (used >= lockedSlot.capacity) {
+      throw new Error("該時段已額滿，請改選其他時段");
+    }
+
+    const createdAt = nowMs();
+    const inserted = await tx.insert(bookings).values({
+      companyId: input.company.id,
+      projectId: input.project.id,
+      linkId: input.link.id,
+      residentId: resident.id,
+      slotId: lockedSlot.id,
+      bookingType: input.link.type,
+      unitNumberSnapshot: resident.unitNumber,
+      phoneNumberSnapshot: resident.phoneNumber,
+      gmail: input.gmail,
+      hasInspectionCompany: input.hasInspectionCompany,
+      status: "booked",
+      internalNote: input.internalNote?.trim() ? input.internalNote.trim() : null,
+      createdAtMs: createdAt,
+      updatedAtMs: createdAt,
+    });
+
+    return Number(inserted[0].insertId);
+  });
+}
+
 export async function verifyResidentForBooking(input: PublicSiteLinkInput & {
   unitNumber: string;
   phoneNumber: string;
@@ -474,106 +663,35 @@ export async function createBookingRecord(input: PublicSiteLinkInput & {
   hasInspectionCompany: boolean;
 }) {
   const site = await getPublicSiteContext(input);
-  const db = await getDb();
-  if (!db) throw new Error("資料庫尚未連線");
-
-  if (site.isExpired) {
-    throw new Error("此預約連結已截止");
-  }
-
-  const [resident] = await db.select().from(residents).where(eq(residents.id, input.residentId)).limit(1);
-  if (!resident) {
-    throw new Error("住戶資料不存在");
-  }
-
-  if (resident.projectId !== site.project.id || resident.companyId !== site.company.id) {
-    throw new Error("此住戶不屬於目前建案，不能使用這個預約連結");
-  }
-
-  const [slot] = await db
-    .select()
-    .from(bookingSlots)
-    .where(and(eq(bookingSlots.id, input.slotId), eq(bookingSlots.projectId, site.project.id), eq(bookingSlots.linkId, site.link.id), eq(bookingSlots.isActive, true)))
-    .limit(1);
-
-  if (!slot) {
-    throw new Error("選擇的時段不存在或已停用");
-  }
-
-  const result = await db.transaction(async tx => {
-    const [existing] = await tx
-      .select({
-        id: bookings.id,
-        slotDate: bookingSlots.slotDate,
-        startLabel: bookingSlots.startLabel,
-        endLabel: bookingSlots.endLabel,
-      })
-      .from(bookings)
-      .innerJoin(bookingSlots, eq(bookingSlots.id, bookings.slotId))
-      .where(
-        and(
-          eq(bookings.linkId, site.link.id),
-          eq(bookings.unitNumberSnapshot, resident.unitNumber),
-          sql`${bookings.status} <> 'cancelled'`
-        )
-      )
-      .limit(1);
-
-    if (existing) {
-      const parts = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Taipei",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).formatToParts(new Date(existing.slotDate));
-      const reservedDate = `${parts.find(part => part.type === "year")?.value}-${parts.find(part => part.type === "month")?.value}-${parts.find(part => part.type === "day")?.value}`;
-      throw new Error(`你已預約 ${reservedDate} ${existing.startLabel}-${existing.endLabel}，不得重複預約`);
-    }
-
-    await lockRowForUpdate(tx as { execute?: (query: unknown) => Promise<unknown> }, "bookingSlots", slot.id);
-
-    const [lockedSlot] = await tx
-      .select()
-      .from(bookingSlots)
-      .where(and(eq(bookingSlots.id, slot.id), eq(bookingSlots.projectId, site.project.id), eq(bookingSlots.linkId, site.link.id), eq(bookingSlots.isActive, true)))
-      .limit(1);
-
-    if (!lockedSlot) {
-      throw new Error("選擇的時段不存在或已停用");
-    }
-
-    const [slotUsage] = await tx
-      .select({ used: count(bookings.id) })
-      .from(bookings)
-      .where(and(eq(bookings.slotId, lockedSlot.id), sql`${bookings.status} <> 'cancelled'`));
-
-    const used = Number(slotUsage?.used ?? 0);
-    if (used >= lockedSlot.capacity) {
-      throw new Error("該時段已額滿，請改選其他時段");
-    }
-
-    const createdAt = nowMs();
-    const inserted = await tx.insert(bookings).values({
-      companyId: site.company.id,
-      projectId: site.project.id,
-      linkId: site.link.id,
-      residentId: resident.id,
-      slotId: lockedSlot.id,
-      bookingType: site.link.type,
-      unitNumberSnapshot: resident.unitNumber,
-      phoneNumberSnapshot: resident.phoneNumber,
-      gmail: input.gmail,
-      hasInspectionCompany: input.hasInspectionCompany,
-      status: "booked",
-      internalNote: null,
-      createdAtMs: createdAt,
-      updatedAtMs: createdAt,
-    });
-
-    return Number(inserted[0].insertId);
+  return createBookingRecordForSite({
+    ...site,
+    residentId: input.residentId,
+    slotId: input.slotId,
+    gmail: input.gmail,
+    hasInspectionCompany: input.hasInspectionCompany,
+    internalNote: null,
+    duplicateSource: "public",
   });
+}
 
-  return result;
+export async function createAdminBookingRecord(input: {
+  linkId: number;
+  residentId: number;
+  slotId: number;
+  gmail: string;
+  hasInspectionCompany: boolean;
+  note?: string;
+}) {
+  const site = await getAdminLinkContext(input.linkId);
+  return createBookingRecordForSite({
+    ...site,
+    residentId: input.residentId,
+    slotId: input.slotId,
+    gmail: input.gmail,
+    hasInspectionCompany: input.hasInspectionCompany,
+    internalNote: input.note ?? null,
+    duplicateSource: "admin",
+  });
 }
 
 export async function getAdminDashboardData() {

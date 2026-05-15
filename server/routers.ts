@@ -10,12 +10,14 @@ import {
   setAdminSessionCookie,
 } from "./adminAuth";
 import {
+  createAdminBookingRecord,
   createBookingRecord,
   deleteBookingLinkRecord,
   deleteBookingSlotRecord,
   deleteCompanyRecord,
   deleteProjectRecord,
   deleteResidentRecord,
+  getAdminBookingAvailability,
   getAdminDashboardData,
   getAdminProfile,
   getAdminRescheduleAvailability,
@@ -307,6 +309,12 @@ export const appRouter = router({
         }
         return searchBookings(input);
       }),
+    bookingAvailability: publicProcedure
+      .input(z.object({ linkId: z.number().int().positive() }))
+      .query(({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        return getAdminBookingAvailability(input.linkId);
+      }),
     rescheduleAvailability: publicProcedure
       .input(z.object({ bookingId: z.number().int().positive() }))
       .query(({ ctx, input }) => {
@@ -329,6 +337,25 @@ export const appRouter = router({
           changedBy: session.username,
           expectedCurrentSlotId: input.currentSlotId,
           staleMessage: "預約資料已更新，請重新整理後再試",
+        });
+        return { success: true, id } as const;
+      }),
+    createBooking: publicProcedure
+      .input(
+        z.object({
+          linkId: z.number().int().positive(),
+          residentId: z.number().int().positive(),
+          slotId: z.number().int().positive(),
+          gmail: bookingEmailSchema,
+          hasInspectionCompany: z.boolean(),
+          note: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        const id = await createAdminBookingRecord({
+          ...input,
+          note: input.note || undefined,
         });
         return { success: true, id } as const;
       }),

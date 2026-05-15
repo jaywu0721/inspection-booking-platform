@@ -90,6 +90,7 @@ vi.mock("../client/src/lib/trpc", () => ({
       admin: {
         dashboard: { invalidate: vi.fn() },
         searchBookings: { invalidate: vi.fn() },
+        bookingAvailability: { invalidate: vi.fn() },
         rescheduleAvailability: { invalidate: vi.fn() },
       },
     }),
@@ -111,6 +112,9 @@ vi.mock("../client/src/lib/trpc", () => ({
       searchBookings: {
         useQuery: () => ({ data: [] }),
       },
+      bookingAvailability: {
+        useQuery: () => ({ data: [], error: undefined, isFetching: false, refetch: vi.fn() }),
+      },
       rescheduleAvailability: {
         useQuery: () => ({ data: [], error: undefined, isFetching: false, refetch: vi.fn() }),
       },
@@ -121,6 +125,7 @@ vi.mock("../client/src/lib/trpc", () => ({
       saveSlot: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: saveSlotMutateAsync, isPending: false }) },
       deleteSlot: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       rescheduleBooking: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      createBooking: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       deleteCompany: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       deleteProject: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       deleteResident: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

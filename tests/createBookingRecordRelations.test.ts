@@ -220,4 +220,31 @@ describe("createBookingRecord relation rules", () => {
       status: "booked",
     });
   });
+
+  it("writes admin-assisted bookings with the selected link and internal note", async () => {
+    captured.bookingSlotSelectCount = 1;
+
+    const bookingId = await dbModule.createAdminBookingRecord({
+      linkId: 30,
+      residentId: 50,
+      slotId: 40,
+      gmail: "owner@example.com",
+      hasInspectionCompany: false,
+      note: "後台協助客戶完成預約",
+    });
+
+    expect(bookingId).toBe(999);
+    expect(captured.insertedBookingPayload).toMatchObject({
+      companyId: 10,
+      projectId: 20,
+      linkId: 30,
+      residentId: 50,
+      slotId: 40,
+      bookingType: "initial",
+      gmail: "owner@example.com",
+      hasInspectionCompany: false,
+      internalNote: "後台協助客戶完成預約",
+      status: "booked",
+    });
+  });
 });

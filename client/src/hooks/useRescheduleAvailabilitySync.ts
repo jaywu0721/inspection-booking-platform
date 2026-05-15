@@ -2,21 +2,21 @@ import { useCallback, useEffect } from "react";
 import { triggerRescheduleAvailabilitySync } from "@/lib/adminRescheduleInteractions";
 
 type Params = {
-  bookingId: string;
+  resourceId: string;
   slotDate: string;
   refetch: () => Promise<unknown> | unknown;
 };
 
-export function useRescheduleAvailabilitySync({ bookingId, slotDate, refetch }: Params) {
+export function useRescheduleAvailabilitySync({ resourceId, slotDate, refetch }: Params) {
   const syncNow = useCallback(() => {
-    if (!bookingId) return;
+    if (!resourceId) return;
     void refetch();
-  }, [bookingId, refetch]);
+  }, [resourceId, refetch]);
 
   useEffect(() => {
-    if (!bookingId || !slotDate) return;
+    if (!resourceId || !slotDate) return;
     void refetch();
-  }, [bookingId, slotDate, refetch]);
+  }, [resourceId, slotDate, refetch]);
 
   const syncOnDropdownOpen = useCallback(() => {
     triggerRescheduleAvailabilitySync(syncNow);

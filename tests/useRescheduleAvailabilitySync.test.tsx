@@ -6,14 +6,14 @@ import { describe, expect, it, vi } from "vitest";
 import { useRescheduleAvailabilitySync } from "../client/src/hooks/useRescheduleAvailabilitySync";
 
 describe("useRescheduleAvailabilitySync", () => {
-  it("refetches when bookingId and slotDate are ready, and refetches again when slotDate changes", async () => {
+  it("refetches when resourceId and slotDate are ready, and refetches again when slotDate changes", async () => {
     const refetch = vi.fn().mockResolvedValue(undefined);
 
     const { rerender } = renderHook(
-      ({ bookingId, slotDate }) => useRescheduleAvailabilitySync({ bookingId, slotDate, refetch }),
+      ({ resourceId, slotDate }) => useRescheduleAvailabilitySync({ resourceId, slotDate, refetch }),
       {
         initialProps: {
-          bookingId: "101",
+          resourceId: "101",
           slotDate: "2026-05-04",
         },
       }
@@ -23,17 +23,17 @@ describe("useRescheduleAvailabilitySync", () => {
       expect(refetch).toHaveBeenCalledTimes(1);
     });
 
-    rerender({ bookingId: "101", slotDate: "2026-05-05" });
+    rerender({ resourceId: "101", slotDate: "2026-05-05" });
 
     await waitFor(() => {
       expect(refetch).toHaveBeenCalledTimes(2);
     });
   });
 
-  it("does not refetch automatically when bookingId or slotDate is missing", async () => {
+  it("does not refetch automatically when resourceId or slotDate is missing", async () => {
     const refetch = vi.fn().mockResolvedValue(undefined);
 
-    renderHook(() => useRescheduleAvailabilitySync({ bookingId: "", slotDate: "", refetch }));
+    renderHook(() => useRescheduleAvailabilitySync({ resourceId: "", slotDate: "", refetch }));
 
     await waitFor(() => {
       expect(refetch).toHaveBeenCalledTimes(0);
@@ -45,7 +45,7 @@ describe("useRescheduleAvailabilitySync", () => {
 
     const { result } = renderHook(() =>
       useRescheduleAvailabilitySync({
-        bookingId: "101",
+        resourceId: "101",
         slotDate: "2026-05-04",
         refetch,
       })
