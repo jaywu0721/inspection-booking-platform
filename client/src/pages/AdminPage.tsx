@@ -291,8 +291,14 @@ export default function AdminPage() {
   const slotLinkOptions = useMemo(() => getLinksForProject(links, slotForm.projectId), [links, slotForm.projectId]);
   const bookingFilterLinkOptions = useMemo(() => getLinksForProject(links, bookingFilters.projectId), [links, bookingFilters.projectId]);
   const unbookedResidents = useMemo(
-    () => findUnbookedResidentsForProject({ residents, bookings: dashboardBookings, projectId: bookingFilters.projectId }),
-    [residents, dashboardBookings, bookingFilters.projectId]
+    () =>
+      findUnbookedResidentsForProject({
+        residents,
+        bookings: dashboardBookings,
+        projectId: bookingFilters.projectId,
+        linkId: bookingFilters.linkId,
+      }),
+    [residents, dashboardBookings, bookingFilters.projectId, bookingFilters.linkId]
   );
   const projectNameById = useMemo(() => new Map(projects.map(project => [project.id, project.name])), [projects]);
   const filteredResidents = useMemo(() => filterResidentsByProject(residents, residentListProjectId), [residents, residentListProjectId]);
@@ -990,18 +996,20 @@ export default function AdminPage() {
                 </Card>
 
                 <Card>
-                  <CardHeader>
-                    <CardTitle>未完成預約住戶</CardTitle>
-                    <CardDescription>這個清單只以你選定的建案為準，比對該建案住戶主檔與未取消的預約紀錄。若你要直接代客預約，必須先在上方選好預約連結，系統才知道要沿用哪一條 link 與哪組時段名額。</CardDescription>
-                  </CardHeader>
+                    <CardHeader>
+                      <CardTitle>未完成預約住戶</CardTitle>
+                      <CardDescription>這個清單現在不是看整個建案，而是看你上方選定的建案與對應預約連結。只有在該 link 下尚未完成預約的戶別才會出現；後台代客預約則可比照預約紀錄編輯改期，不受連結開放時間限制。</CardDescription>
+                    </CardHeader>
+
                   <CardContent className="space-y-4">
                     <div className="flex flex-wrap items-center gap-3">
                       <Button
                         type="button"
                         variant="outline"
+                        disabled={!bookingFilters.projectId || !bookingFilters.linkId}
                         onClick={() => {
-                          if (!bookingFilters.projectId) {
-                            toast.error("請先選擇建案，再查看未完成預約住戶");
+                          if (!bookingFilters.projectId || !bookingFilters.linkId) {
+                            toast.error("請先選擇建案與對應預約連結，再查看未完成預約住戶");
                             return;
                           }
                           setShowUnbookedResidents(current => !current);
@@ -1009,9 +1017,9 @@ export default function AdminPage() {
                       >
                         {showUnbookedResidents ? "隱藏未完成預約住戶" : "查看未完成預約住戶"}
                       </Button>
-                      {bookingFilters.projectId ? <Badge variant="secondary">{unbookedResidents.length} 戶未完成</Badge> : null}
+                      {bookingFilters.projectId && bookingFilters.linkId ? <Badge variant="secondary">{unbookedResidents.length} 戶未完成</Badge> : null}
                     </div>
-                    {showUnbookedResidents && bookingFilters.projectId ? (
+                    {showUnbookedResidents && bookingFilters.projectId && bookingFilters.linkId ? (
                       unbookedResidents.length ? (
                         <div className="overflow-x-auto rounded-2xl border border-border/70">
                           <Table>
@@ -1072,7 +1080,7 @@ export default function AdminPage() {
                           </Table>
                         </div>
                       ) : (
-                        <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">目前所選建案的住戶都已有未取消的預約紀錄。</div>
+                        <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">目前所選建案與預約連結下的住戶都已有未取消的預約紀錄。</div>
                       )
                     ) : null}
                   </CardContent>

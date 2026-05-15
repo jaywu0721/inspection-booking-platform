@@ -18,6 +18,7 @@ export type DashboardResidentSource = {
 
 export type DashboardBookingSource = {
   projectId: number;
+  linkId?: number | null;
   unitNumberSnapshot: string;
   status?: string | null;
 };
@@ -42,15 +43,27 @@ export function findUnbookedResidentsForProject<
   residents: TResident[];
   bookings: TBooking[];
   projectId: string;
+  linkId: string;
 }) {
   const parsedProjectId = Number(input.projectId);
+  const parsedLinkId = Number(input.linkId);
+
   if (!Number.isInteger(parsedProjectId) || parsedProjectId <= 0) {
+    return [] as TResident[];
+  }
+
+  if (!Number.isInteger(parsedLinkId) || parsedLinkId <= 0) {
     return [] as TResident[];
   }
 
   const bookedUnitNumbers = new Set(
     input.bookings
-      .filter(booking => booking.projectId === parsedProjectId && booking.status !== "cancelled")
+      .filter(
+        booking =>
+          booking.projectId === parsedProjectId &&
+          booking.linkId === parsedLinkId &&
+          booking.status !== "cancelled"
+      )
       .map(booking => normalizeUnitNumber(booking.unitNumberSnapshot))
   );
 

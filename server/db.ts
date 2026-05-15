@@ -438,9 +438,6 @@ async function getAdminLinkContext(linkId: number) {
 
 export async function getAdminBookingAvailability(linkId: number) {
   const site = await getAdminLinkContext(linkId);
-  if (site.isExpired) {
-    throw new Error("此預約連結已截止");
-  }
 
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
@@ -501,11 +498,12 @@ async function createBookingRecordForSite(input: {
   hasInspectionCompany: boolean;
   internalNote?: string | null;
   duplicateSource: "public" | "admin";
+  enforceLinkWindow?: boolean;
 }) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
-  if (input.isExpired) {
+  if (input.enforceLinkWindow !== false && input.isExpired) {
     throw new Error("此預約連結已截止");
   }
 
@@ -671,6 +669,7 @@ export async function createBookingRecord(input: PublicSiteLinkInput & {
     hasInspectionCompany: input.hasInspectionCompany,
     internalNote: null,
     duplicateSource: "public",
+    enforceLinkWindow: true,
   });
 }
 
@@ -691,6 +690,7 @@ export async function createAdminBookingRecord(input: {
     hasInspectionCompany: input.hasInspectionCompany,
     internalNote: input.note ?? null,
     duplicateSource: "admin",
+    enforceLinkWindow: false,
   });
 }
 

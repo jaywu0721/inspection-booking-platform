@@ -31,13 +31,14 @@ const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookin
     slots: [],
     residents: [
       { id: 201, projectId: 20, unitNumber: "12F-1", phoneNumber: "0912000001", note: "已預約" },
-      { id: 202, projectId: 20, unitNumber: "12F-2", phoneNumber: "0912000002", note: "尚未預約" },
+      { id: 202, projectId: 20, unitNumber: "12F-2", phoneNumber: "0912000002", note: "另一條連結已預約" },
       { id: 203, projectId: 20, unitNumber: "12F-3", phoneNumber: "0912000003", note: "已取消後未補約" },
       { id: 204, projectId: 20, unitNumber: " 12f-2 ", phoneNumber: "0912000004", note: "同戶第二聯絡人" },
     ],
     bookings: [
-      { id: 1, projectId: 20, unitNumberSnapshot: "12F-1", status: "booked" },
-      { id: 2, projectId: 20, unitNumberSnapshot: "12F-3", status: "cancelled" },
+      { id: 1, projectId: 20, linkId: 30, unitNumberSnapshot: "12F-1", status: "booked" },
+      { id: 2, projectId: 20, linkId: 30, unitNumberSnapshot: "12F-3", status: "cancelled" },
+      { id: 3, projectId: 20, linkId: 31, unitNumberSnapshot: "12F-2", status: "booked" },
     ],
     reschedules: [],
   });
@@ -92,7 +93,7 @@ const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookin
       id: 40,
       companyId: 10,
       projectId: 20,
-      linkId: 30,
+      linkId: 31,
       slotDate: new Date("2026-05-08T00:00:00.000Z"),
       startLabel: "09:00",
       endLabel: "10:30",
@@ -105,7 +106,7 @@ const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookin
       id: 41,
       companyId: 10,
       projectId: 20,
-      linkId: 30,
+      linkId: 31,
       slotDate: new Date("2026-05-08T00:00:00.000Z"),
       startLabel: "14:00",
       endLabel: "15:30",
@@ -217,7 +218,8 @@ vi.mock("../client/src/lib/trpc", () => ({
             const resident = state.currentDashboardData.residents.find(item => item.id === input.residentId);
             const project = resident ? state.currentDashboardData.projects.find(item => item.id === resident.projectId) : undefined;
             const company = project ? state.currentDashboardData.companies.find(item => item.id === project.companyId) : undefined;
-            if (!resident || !project || !company) {
+            const link = state.currentDashboardData.links.find(item => item.id === input.linkId);
+            if (!resident || !project || !company || !link) {
               throw new Error("測試假資料缺少必要關聯");
             }
 
@@ -226,7 +228,7 @@ vi.mock("../client/src/lib/trpc", () => ({
               ...state.currentDashboardData,
               bookings: [
                 ...state.currentDashboardData.bookings,
-                { id: nextId, projectId: project.id, unitNumberSnapshot: resident.unitNumber, status: "booked" as const },
+                { id: nextId, projectId: project.id, linkId: input.linkId, unitNumberSnapshot: resident.unitNumber, status: "booked" as const },
               ],
             };
             state.currentSearchBookingsResult = [
@@ -239,7 +241,7 @@ vi.mock("../client/src/lib/trpc", () => ({
                 slotId: input.slotId,
                 companyName: company.name,
                 projectName: project.name,
-                bookingType: "initial" as const,
+                bookingType: link.type,
                 unitNumberSnapshot: resident.unitNumber,
                 phoneNumberSnapshot: resident.phoneNumber,
                 gmail: input.gmail,
@@ -306,18 +308,24 @@ describe("AdminPage booking inspection company integration", () => {
     expect(within(bookingTable as HTMLElement).queryByText("12F-2")).toBeNull();
   });
 
-  it("shows unbooked residents for the selected project when the admin clicks the shortcut button", () => {
+  it("requires selecting a link and shows unfinished residents for that link only", () => {
     render(<AdminPage />);
 
     const selects = screen.getAllByRole("combobox");
     fireEvent.change(selects[0], { target: { value: "20" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "查看未完成預約住戶" })[0]);
+
+    const toggleButton = screen.getAllByRole("button", { name: "查看未完成預約住戶" })[0] as HTMLButtonElement;
+    expect(toggleButton.disabled).toBe(true);
+
+    fireEvent.change(selects[1], { target: { value: "30" } });
+    expect(toggleButton.disabled).toBe(false);
+    fireEvent.click(toggleButton);
 
     expect(screen.getByText("2 戶未完成")).toBeTruthy();
 
     const unbookedTable = screen
       .getAllByRole("table")
-      .find(table => within(table).queryByText("備註") && within(table).queryByText("尚未預約"));
+      .find(table => within(table).queryByText("備註") && within(table).queryByText("另一條連結已預約"));
 
     expect(unbookedTable).toBeTruthy();
     expect(within(unbookedTable as HTMLElement).getAllByText("12F-2").length).toBe(1);
@@ -325,17 +333,17 @@ describe("AdminPage booking inspection company integration", () => {
     expect(within(unbookedTable as HTMLElement).queryByText("12F-1")).toBeNull();
   });
 
-  it("books an unbooked resident from the admin shortcut and removes the resident from the unfinished list", async () => {
+  it("allows assisted booking on a stopped link and removes the resident from that link's unfinished list", async () => {
     render(<AdminPage />);
 
     const selects = screen.getAllByRole("combobox");
     fireEvent.change(selects[0], { target: { value: "20" } });
-    fireEvent.change(selects[1], { target: { value: "30" } });
+    fireEvent.change(selects[1], { target: { value: "31" } });
     fireEvent.click(screen.getAllByRole("button", { name: "查看未完成預約住戶" })[0]);
 
     const unbookedTable = screen
       .getAllByRole("table")
-      .find(table => within(table).queryByText("備註") && within(table).queryByText("尚未預約"));
+      .find(table => within(table).queryByText("備註") && within(table).queryByText("已取消後未補約"));
 
     expect(unbookedTable).toBeTruthy();
 
@@ -351,7 +359,7 @@ describe("AdminPage booking inspection company integration", () => {
     fireEvent.click(screen.getByRole("button", { name: "確認代客預約" }));
 
     expect(createBookingMutate).toHaveBeenCalledWith({
-      linkId: 30,
+      linkId: 31,
       residentId: 203,
       slotId: 40,
       note: "後台協助住戶完成預約",
@@ -365,10 +373,11 @@ describe("AdminPage booking inspection company integration", () => {
 
     const refreshedUnbookedTable = screen
       .getAllByRole("table")
-      .find(table => within(table).queryByText("備註") && within(table).queryByText("尚未預約"));
+      .find(table => within(table).queryByText("備註") && within(table).queryByText("已預約"));
 
     expect(refreshedUnbookedTable).toBeTruthy();
     expect(within(refreshedUnbookedTable as HTMLElement).queryByText("12F-3")).toBeNull();
+    expect(within(refreshedUnbookedTable as HTMLElement).getByText("12F-1")).toBeTruthy();
     expect(screen.getAllByText("12F-3").length).toBeGreaterThan(0);
   });
 });

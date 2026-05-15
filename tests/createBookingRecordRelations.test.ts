@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { bookingLinks, bookings, bookingSlots, companies, projects, residents } from "../drizzle/schema";
 
 const { captured, fakeDb } = vi.hoisted(() => {
-  const siteRow = {
+  const createSiteRow = () => ({
     company: { id: 10, slug: "eagle", name: "鷁欣建設" },
     project: { id: 20, companyId: 10, slug: "a1", name: "A1" },
     link: {
@@ -15,7 +15,9 @@ const { captured, fakeDb } = vi.hoisted(() => {
       endsAt: new Date("2026-12-31T00:00:00.000Z"),
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
     },
-  };
+  });
+
+  const siteRow = createSiteRow();
 
   const slotRow = {
     id: 40,
@@ -38,6 +40,7 @@ const { captured, fakeDb } = vi.hoisted(() => {
     currentWhere: undefined as unknown,
     lastTransactionWhere: [] as unknown[],
     siteRow,
+    createSiteRow,
     slotRow,
     bookingSlotSelectCount: 0,
   };
@@ -159,6 +162,7 @@ describe("createBookingRecord relation rules", () => {
     captured.insertedBookingPayload = null;
     captured.currentWhere = undefined;
     captured.lastTransactionWhere = [];
+    captured.siteRow = captured.createSiteRow();
     captured.bookingSlotSelectCount = 0;
   });
 
@@ -221,8 +225,16 @@ describe("createBookingRecord relation rules", () => {
     });
   });
 
-  it("writes admin-assisted bookings with the selected link and internal note", async () => {
+  it("writes admin-assisted bookings with the selected link and internal note even if the link is stopped and expired", async () => {
     captured.bookingSlotSelectCount = 1;
+    captured.siteRow = {
+      ...captured.siteRow,
+      link: {
+        ...captured.siteRow.link,
+        isEnabled: false,
+        endsAt: new Date("2025-01-01T00:00:00.000Z"),
+      },
+    };
 
     const bookingId = await dbModule.createAdminBookingRecord({
       linkId: 30,
