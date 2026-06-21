@@ -19,7 +19,7 @@ const siteContext = {
     heroTitle: "鷁欣建設驗屋預約",
     heroDescription: "請依照通知完成住戶驗證與預約。",
     inspectionFlow: "驗屋流程說明",
-    handoverFlow: "交屋流程說明",
+    handoverFlow: "複驗完成後，將由專員另行通知交屋流程、所需文件與現場點交安排；實際時程依公司通知與雙方約定為準。",
     precautions: "注意事項",
     faqItems: [{ question: "Q1", answer: "A1" }],
     contactWindow: "客服窗口",
@@ -128,6 +128,14 @@ describe("Home booking email rules", () => {
     fireEvent.click(screen.getAllByText("點選後顯示該日期可預約時段")[0].closest("button") as HTMLElement);
     fireEvent.click(screen.getByText("剩餘 2 名").closest("button") as HTMLElement);
   }
+
+  it("renders handover guidance without an unsupported five-day delivery promise", () => {
+    render(<Home />);
+
+    expect(screen.getByText("複驗完成後，將由專員另行通知交屋流程、所需文件與現場點交安排；實際時程依公司通知與雙方約定為準。")).toBeTruthy();
+    expect(screen.queryByText(/3-5 個工作日內/)).toBeNull();
+    expect(screen.queryByText(/複驗後5日內完成交屋/)).toBeNull();
+  });
 
   it("shows the email field as optional and still submits when left blank", async () => {
     await prepareBookingForm();
