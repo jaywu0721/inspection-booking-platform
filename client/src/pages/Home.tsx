@@ -456,9 +456,6 @@ export default function Home() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <h3 className="text-base font-semibold text-foreground">詳細交屋流程圖</h3>
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      圖中「客戶於通知後 5 日內配合辦理交屋」係指建設公司正式通知交屋後，住戶需配合安排完成交屋程序，並非指複驗完成後 5 日內即必須完成交屋。
-                    </p>
                   </div>
                   <div className="overflow-hidden rounded-lg border border-border/70 bg-muted/20 p-3">
                     <img

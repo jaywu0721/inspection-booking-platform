@@ -129,13 +129,13 @@ describe("Home booking email rules", () => {
     fireEvent.click(screen.getByText("剩餘 2 名").closest("button") as HTMLElement);
   }
 
-  it("renders handover guidance and the detailed handover flow chart without an unsupported post-reinspection deadline", () => {
+  it("renders handover guidance and the detailed handover flow chart without the extra clarification paragraph", () => {
     render(<Home />);
 
     expect(screen.getByText("複驗完成後，將由專員另行通知交屋流程、所需文件與現場點交安排；實際時程依公司通知與雙方約定為準。")).toBeTruthy();
     expect(screen.getByText("詳細交屋流程圖")).toBeTruthy();
-    expect(screen.getByText(/圖中「客戶於通知後 5 日內配合辦理交屋」係指建設公司正式通知交屋後/)).toBeTruthy();
     expect(screen.getByAltText("詳細交屋流程圖").getAttribute("src")).toBe("/manus-storage/customer-handover-flow_6324d5db.webp");
+    expect(screen.queryByText(/圖中「客戶於通知後 5 日內配合辦理交屋」/)).toBeNull();
     expect(screen.queryByText(/3-5 個工作日內/)).toBeNull();
     expect(screen.queryByText(/複驗後5日內完成交屋/)).toBeNull();
   });
