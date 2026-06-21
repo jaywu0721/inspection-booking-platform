@@ -16,6 +16,7 @@ import { toast } from "sonner";
 const formatDate = formatDateInTaipei;
 const formatDateTime = formatDateTimeInTaipei;
 const getDateKey = getDateKeyInTaipei;
+const HANDOVER_FLOW_IMAGE_PATH = "/manus-storage/customer-handover-flow_6324d5db.webp";
 
 function parseBookingErrorMessage(message: string) {
   try {
@@ -436,7 +437,7 @@ export default function Home() {
               <CardHeader>
                 <CardTitle>常見問答</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-6">
                 <Accordion type="single" collapsible className="w-full">
                   {company.faqItems.map((item, index) => {
                     const answer = item.question === "如果要改期怎麼處理？"
@@ -451,6 +452,23 @@ export default function Home() {
                     );
                   })}
                 </Accordion>
+                <Separator />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h3 className="text-base font-semibold text-foreground">詳細交屋流程圖</h3>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      圖中「客戶於通知後 5 日內配合辦理交屋」係指建設公司正式通知交屋後，住戶需配合安排完成交屋程序，並非指複驗完成後 5 日內即必須完成交屋。
+                    </p>
+                  </div>
+                  <div className="overflow-hidden rounded-lg border border-border/70 bg-muted/20 p-3">
+                    <img
+                      src={HANDOVER_FLOW_IMAGE_PATH}
+                      alt="詳細交屋流程圖"
+                      className="mx-auto w-full max-w-[420px] object-contain"
+                      loading="lazy"
+                    />
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
