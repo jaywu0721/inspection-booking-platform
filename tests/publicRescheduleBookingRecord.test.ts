@@ -346,7 +346,7 @@ describe("publicRescheduleBookingRecord", () => {
     ).rejects.toThrow("該時段已無剩餘名額");
   });
 
-  it("writes a customer reschedule history row and updates the booking slot on success", async () => {
+  it("writes a customer reschedule history row, updates the booking slot, and keeps the original inspection-company flag when not provided", async () => {
     const bookingId = await dbModule.publicRescheduleBookingRecord({
       companySlug: "eagle",
       projectSlug: "a1",
@@ -367,6 +367,26 @@ describe("publicRescheduleBookingRecord", () => {
     expect(captured.updatedBookingPayload).toMatchObject({
       slotId: 41,
       status: "rescheduled",
+      hasInspectionCompany: false,
+    });
+  });
+
+  it("overrides hasInspectionCompany when the customer changes that option during reschedule", async () => {
+    await dbModule.publicRescheduleBookingRecord({
+      companySlug: "eagle",
+      projectSlug: "a1",
+      type: "initial",
+      residentId: 50,
+      bookingId: 900,
+      currentSlotId: 40,
+      newSlotId: 41,
+      hasInspectionCompany: true,
+    });
+
+    expect(captured.updatedBookingPayload).toMatchObject({
+      slotId: 41,
+      status: "rescheduled",
+      hasInspectionCompany: true,
     });
   });
 

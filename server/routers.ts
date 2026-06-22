@@ -69,6 +69,7 @@ export const publicRescheduleBookingInputSchema = publicSiteLocatorSchema.safeEx
   residentId: z.number().int().positive(),
   currentSlotId: z.number().int().positive(),
   newSlotId: z.number().int().positive(),
+  hasInspectionCompany: z.boolean().optional(),
 });
 
 export const appRouter = router({
@@ -328,6 +329,7 @@ export const appRouter = router({
           currentSlotId: z.number().int().positive().optional(),
           newSlotId: z.number().int().positive(),
           note: z.string().optional(),
+          hasInspectionCompany: z.boolean().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {

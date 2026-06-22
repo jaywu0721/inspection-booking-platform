@@ -86,7 +86,7 @@ export default function AdminPage() {
   const [editableSlotPresets, setEditableSlotPresets] = useState(createEditableSlotPresets());
   const [bookingFilters, setBookingFilters] = useState({ projectId: "", linkId: "", unitNumber: "", bookingType: "all", status: "all", bookingDate: "" });
   const [showUnbookedResidents, setShowUnbookedResidents] = useState(false);
-  const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "" });
+  const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "", hasInspectionCompany: false });
   const [assistedBookingForm, setAssistedBookingForm] = useState({ residentId: "", linkId: "", slotDate: "", slotId: "", note: "", gmail: "", hasInspectionCompany: false });
   const [residentListProjectId, setResidentListProjectId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link" | "slot"; id: number; label: string; step: 1 | 2 }>(null);
@@ -225,7 +225,7 @@ export default function AdminPage() {
     onSuccess: async () => {
       toast.success("預約已完成改期");
       await refreshAll();
-      setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "" });
+      setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "", hasInspectionCompany: false });
     },
     onError: error => toast.error(error.message),
   });
@@ -431,11 +431,12 @@ export default function AdminPage() {
       slotDate: getDateKey(booking.slotDate),
       newSlotId: "",
       note: booking.internalNote || "",
+      hasInspectionCompany: booking.hasInspectionCompany,
     });
   };
 
   const cancelEditingBooking = () => {
-    setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "" });
+    setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "", hasInspectionCompany: false });
   };
 
   const startAssistedBooking = (resident: typeof unbookedResidents[number]) => {
@@ -619,6 +620,7 @@ export default function AdminPage() {
       currentSlotId: rescheduleForm.currentSlotId ? Number(rescheduleForm.currentSlotId) : undefined,
       newSlotId: Number(rescheduleForm.newSlotId),
       note: rescheduleForm.note || undefined,
+      hasInspectionCompany: rescheduleForm.hasInspectionCompany,
     });
   };
 
@@ -1133,6 +1135,7 @@ export default function AdminPage() {
                       onChangeDate={nextDate => setRescheduleForm(current => ({ ...current, slotDate: nextDate, newSlotId: "" }))}
                       onChangeSlot={newSlotId => setRescheduleForm(current => ({ ...current, newSlotId }))}
                       onChangeNote={note => setRescheduleForm(current => ({ ...current, note }))}
+                      onChangeHasInspectionCompany={hasInspectionCompany => setRescheduleForm(current => ({ ...current, hasInspectionCompany }))}
                       onSyncAvailability={syncRescheduleAvailability}
                       onSubmit={submitReschedule}
                       onCancel={cancelEditingBooking}

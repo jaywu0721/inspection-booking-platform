@@ -45,7 +45,7 @@ export function formatInspectionCompanyLabel(hasInspectionCompany: boolean) {
 type Props = {
   bookings: AdminBookingRecordRow[];
   editingBookingId: string;
-  rescheduleForm: { slotDate: string; newSlotId: string; note: string };
+  rescheduleForm: { slotDate: string; newSlotId: string; note: string; hasInspectionCompany: boolean };
   dateOptions: AdminBookingDateOption[];
   slotOptions: AdminBookingSlotOption[];
   isFetching: boolean;
@@ -55,6 +55,7 @@ type Props = {
   onChangeDate: (nextDate: string) => void;
   onChangeSlot: (newSlotId: string) => void;
   onChangeNote: (note: string) => void;
+  onChangeHasInspectionCompany: (hasInspectionCompany: boolean) => void;
   onSyncAvailability: () => void;
   onSubmit: () => void;
   onCancel: () => void;
@@ -73,6 +74,7 @@ export function AdminBookingRecordsTable({
   onChangeDate,
   onChangeSlot,
   onChangeNote,
+  onChangeHasInspectionCompany,
   onSyncAvailability,
   onSubmit,
   onCancel,
@@ -123,6 +125,7 @@ export function AdminBookingRecordsTable({
                     slotDate={rescheduleForm.slotDate}
                     newSlotId={rescheduleForm.newSlotId}
                     note={rescheduleForm.note}
+                    hasInspectionCompany={rescheduleForm.hasInspectionCompany}
                     dateOptions={dateOptions}
                     slotOptions={slotOptions}
                     isFetching={isFetching}
@@ -131,6 +134,7 @@ export function AdminBookingRecordsTable({
                     onChangeDate={onChangeDate}
                     onChangeSlot={onChangeSlot}
                     onChangeNote={onChangeNote}
+                    onChangeHasInspectionCompany={onChangeHasInspectionCompany}
                     onSyncAvailability={onSyncAvailability}
                     onSubmit={onSubmit}
                     onCancel={onCancel}

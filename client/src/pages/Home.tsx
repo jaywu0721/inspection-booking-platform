@@ -247,6 +247,7 @@ export default function Home() {
       residentId: verificationResult.resident.id,
       currentSlotId: sameLinkExistingBooking.slotId,
       newSlotId: slotId,
+      hasInspectionCompany,
     });
   };
 
@@ -549,7 +550,7 @@ export default function Home() {
                                   目前預約時間：{formatDate(sameLinkExistingBooking.slotDate)} {sameLinkExistingBooking.startLabel} - {sameLinkExistingBooking.endLabel}
                                 </p>
                                 <p>
-                                  這裡只允許你在連結開放期間內修改日期時段，聯絡資料維持原紀錄不開放編輯。連結截止後，就只能由管理員在後台協助改期。
+                                  這裡允許你在連結開放期間內修改日期時段，也可同步更新此次是否由驗屋公司陪同；若連結截止，仍需改由管理員在後台協助改期。
                                 </p>
                               </AlertDescription>
                             </Alert>
@@ -564,6 +565,7 @@ export default function Home() {
                                   setIsRescheduleMode(true);
                                   setSelectedSlotDate("");
                                   setSlotId(null);
+                                  setHasInspectionCompany(Boolean(sameLinkExistingBooking?.hasInspectionCompany));
                                   void siteQuery.refetch?.();
                                 }}
                               >
@@ -661,6 +663,10 @@ export default function Home() {
                                     </>
                                   )}
                                 </div>
+                                <label className="flex items-center gap-3 rounded-2xl border border-border/70 p-4">
+                                  <Checkbox checked={hasInspectionCompany} onCheckedChange={checked => setHasInspectionCompany(Boolean(checked))} />
+                                  <span className="text-sm text-muted-foreground">此次驗屋是否會由驗屋公司陪同</span>
+                                </label>
                                 <Button className="w-full" onClick={submitReschedule} disabled={rescheduleBookingMutation.isPending || site.isExpired}>
                                   {rescheduleBookingMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                                   確認修改日期

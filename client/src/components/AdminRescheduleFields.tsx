@@ -1,6 +1,7 @@
 import React from "react";
 import { triggerRescheduleAvailabilitySync } from "@/lib/adminRescheduleInteractions";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
@@ -22,6 +23,7 @@ type Props = {
   slotDate: string;
   newSlotId: string;
   note: string;
+  hasInspectionCompany: boolean;
   dateOptions: DateOption[];
   slotOptions: SlotOption[];
   isFetching: boolean;
@@ -30,6 +32,7 @@ type Props = {
   onChangeDate: (slotDate: string) => void;
   onChangeSlot: (slotId: string) => void;
   onChangeNote: (note: string) => void;
+  onChangeHasInspectionCompany: (hasInspectionCompany: boolean) => void;
   onSyncAvailability: () => void;
   onSubmit: () => void;
   onCancel: () => void;
@@ -39,6 +42,7 @@ export function AdminRescheduleFields({
   slotDate,
   newSlotId,
   note,
+  hasInspectionCompany,
   dateOptions,
   slotOptions,
   isFetching,
@@ -47,12 +51,13 @@ export function AdminRescheduleFields({
   onChangeDate,
   onChangeSlot,
   onChangeNote,
+  onChangeHasInspectionCompany,
   onSyncAvailability,
   onSubmit,
   onCancel,
 }: Props) {
   return (
-    <div className="grid gap-4 py-2 md:grid-cols-4">
+    <div className="grid gap-4 py-2 md:grid-cols-5">
       <div className="space-y-2">
         <Label htmlFor="admin-reschedule-date">新日期</Label>
         <select
@@ -106,6 +111,14 @@ export function AdminRescheduleFields({
           onChange={event => onChangeNote(event.target.value)}
           placeholder="例如：住戶要求改期"
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label>驗屋公司</Label>
+        <label className="flex min-h-10 items-center gap-3 rounded-md border border-input px-3 text-sm">
+          <Checkbox checked={hasInspectionCompany} onCheckedChange={checked => onChangeHasInspectionCompany(Boolean(checked))} />
+          <span>此次驗屋由驗屋公司陪同</span>
+        </label>
       </div>
 
       <div className="flex items-end gap-2">

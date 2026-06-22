@@ -1097,6 +1097,7 @@ export async function rescheduleBookingRecord(input: {
   bookingId: number;
   newSlotId: number;
   note?: string;
+  hasInspectionCompany?: boolean;
   changedBy: string;
   expectedCurrentSlotId?: number;
   requiredResidentId?: number;
@@ -1159,6 +1160,9 @@ export async function rescheduleBookingRecord(input: {
     }
 
     const changedAtMs = nowMs();
+    const nextHasInspectionCompany = typeof input.hasInspectionCompany === "boolean"
+      ? input.hasInspectionCompany
+      : booking.hasInspectionCompany;
 
     await tx.insert(bookingReschedules).values({
       bookingId: booking.id,
@@ -1175,6 +1179,7 @@ export async function rescheduleBookingRecord(input: {
         slotId: newSlot.id,
         status: "rescheduled",
         internalNote: input.note ?? null,
+        hasInspectionCompany: nextHasInspectionCompany,
         updatedAtMs: changedAtMs,
       })
       .where(eq(bookings.id, booking.id));
@@ -1188,6 +1193,7 @@ export async function publicRescheduleBookingRecord(input: PublicSiteLinkInput &
   residentId: number;
   currentSlotId: number;
   newSlotId: number;
+  hasInspectionCompany?: boolean;
 }) {
   const site = await getPublicSiteContext(input);
   const db = await getDb();
@@ -1211,6 +1217,7 @@ export async function publicRescheduleBookingRecord(input: PublicSiteLinkInput &
     newSlotId: input.newSlotId,
     changedBy: "customer",
     expectedCurrentSlotId: input.currentSlotId,
+    hasInspectionCompany: input.hasInspectionCompany,
     requiredResidentId: resident.id,
     requiredLinkId: site.link.id,
     bookingNotFoundMessage: "找不到對應預約資料",

@@ -4,7 +4,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookingMutate, downloadBookingListWorkbookMock } = vi.hoisted(() => {
+const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookingMutate, rescheduleBookingMutate, downloadBookingListWorkbookMock } = vi.hoisted(() => {
   const createDashboardData = () => ({
     companies: [{ id: 10, name: "鷁欣建設" }],
     projects: [{ id: 20, companyId: 10, name: "A1" }],
@@ -131,6 +131,7 @@ const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookin
     searchBookingsUseQuery: vi.fn(),
     bookingAvailabilityUseQuery: vi.fn(),
     createBookingMutate: vi.fn(),
+    rescheduleBookingMutate: vi.fn(),
     downloadBookingListWorkbookMock: vi.fn(),
   };
 });
@@ -207,7 +208,7 @@ vi.mock("../client/src/lib/trpc", () => ({
         useQuery: bookingAvailabilityUseQuery,
       },
       rescheduleAvailability: {
-        useQuery: () => ({ data: [], error: undefined, isFetching: false, refetch: vi.fn() }),
+        useQuery: () => ({ data: state.bookingAvailabilityData, error: undefined, isFetching: false, refetch: vi.fn() }),
       },
       saveCompany: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       saveProject: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -215,7 +216,20 @@ vi.mock("../client/src/lib/trpc", () => ({
       saveLink: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       saveSlot: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       deleteSlot: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      rescheduleBooking: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      rescheduleBooking: {
+        useMutation: () => ({
+          mutate: (input: {
+            bookingId: number;
+            currentSlotId?: number;
+            newSlotId: number;
+            note?: string;
+            hasInspectionCompany?: boolean;
+          }) => {
+            rescheduleBookingMutate(input);
+          },
+          isPending: false,
+        }),
+      },
       createBooking: {
         useMutation: (options?: { onSuccess?: (data: { success: true; id: number }) => void }) => ({
           mutate: (input: { linkId: number; residentId: number; slotId: number; gmail: string; hasInspectionCompany: boolean; note?: string }) => {
@@ -282,6 +296,7 @@ describe("AdminPage booking inspection company integration", () => {
     searchBookingsUseQuery.mockClear();
     bookingAvailabilityUseQuery.mockClear();
     createBookingMutate.mockClear();
+    rescheduleBookingMutate.mockClear();
     downloadBookingListWorkbookMock.mockReset();
     downloadBookingListWorkbookMock.mockResolvedValue(undefined);
   });
@@ -313,6 +328,37 @@ describe("AdminPage booking inspection company integration", () => {
     expect(bookingTable).toBeTruthy();
     expect(within(bookingTable as HTMLElement).getByText("12F-1")).toBeTruthy();
     expect(within(bookingTable as HTMLElement).queryByText("12F-2")).toBeNull();
+  });
+
+  it("allows editing hasInspectionCompany during admin reschedule and submits the updated value", async () => {
+    render(<AdminPage />);
+
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[0], { target: { value: "20" } });
+    fireEvent.change(selects[1], { target: { value: "31" } });
+
+    const bookingTable = screen.getAllByRole("table").find(table => within(table).queryByText("是否驗屋公司"));
+    expect(bookingTable).toBeTruthy();
+
+    const bookingRow = within((within(bookingTable as HTMLElement).getByText("12F-2").closest("tr") as HTMLElement).closest("tr") as HTMLElement);
+
+    fireEvent.click(bookingRow.getByRole("button", { name: "編輯改期" }));
+
+    expect(screen.getByText("此次驗屋由驗屋公司陪同")).toBeTruthy();
+    expect(screen.getByRole("checkbox").getAttribute("data-state")).toBe("unchecked");
+
+    fireEvent.change(screen.getByLabelText("新日期"), { target: { value: "2026-05-08" } });
+    fireEvent.change(screen.getByLabelText("新時段"), { target: { value: "40" } });
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "確認改期" }));
+
+    expect(rescheduleBookingMutate).toHaveBeenCalledWith({
+      bookingId: 2,
+      currentSlotId: 41,
+      newSlotId: 40,
+      note: "改期一次",
+      hasInspectionCompany: true,
+    });
   });
 
   it("downloads the booking list from the currently filtered booking records", async () => {
@@ -377,7 +423,7 @@ describe("AdminPage booking inspection company integration", () => {
     fireEvent.click(within(residentRow as HTMLElement).getByRole("button", { name: "代客預約" }));
     fireEvent.change(screen.getByLabelText("預約日期"), { target: { value: "2026-05-08" } });
     fireEvent.change(screen.getByLabelText("預約時段"), { target: { value: "40" } });
-    fireEvent.change(screen.getByLabelText("備註"), { target: { value: "後台協助住戶完成預約" } });
+    fireEvent.change(screen.getByPlaceholderText("例如：後台協助客戶完成預約"), { target: { value: "後台協助住戶完成預約" } });
     fireEvent.change(screen.getByLabelText("Email（選填）"), { target: { value: "owner3@example.com" } });
     fireEvent.click(screen.getByLabelText("是否驗屋公司"));
     fireEvent.click(screen.getByRole("button", { name: "確認代客預約" }));

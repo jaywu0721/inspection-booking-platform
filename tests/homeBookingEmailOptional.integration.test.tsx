@@ -4,8 +4,9 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createBookingMutateAsync, toastSuccess, toastError, getContextRefetch, scrollIntoViewMock } = vi.hoisted(() => ({
+const { createBookingMutateAsync, rescheduleBookingMutateAsync, toastSuccess, toastError, getContextRefetch, scrollIntoViewMock } = vi.hoisted(() => ({
   createBookingMutateAsync: vi.fn(),
+  rescheduleBookingMutateAsync: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
   getContextRefetch: vi.fn(async () => ({ data: siteContext })),
@@ -94,7 +95,10 @@ vi.mock("../client/src/lib/trpc", () => ({
       rescheduleBooking: {
         useMutation: () => ({
           isPending: false,
-          mutateAsync: async () => ({ success: true }),
+          mutateAsync: async (payload: unknown) => {
+            rescheduleBookingMutateAsync(payload);
+            return { success: true };
+          },
         }),
       },
     },
@@ -106,10 +110,12 @@ import Home from "../client/src/pages/Home";
 describe("Home booking email rules", () => {
   beforeEach(() => {
     createBookingMutateAsync.mockReset();
+    rescheduleBookingMutateAsync.mockReset();
     toastSuccess.mockReset();
     toastError.mockReset();
     getContextRefetch.mockClear();
     scrollIntoViewMock.mockClear();
+    verificationResult.existingBookings = [];
     window.history.replaceState({}, "", "/?link=demo-link-token");
     HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
   });
@@ -170,6 +176,57 @@ describe("Home booking email rules", () => {
       expect(createBookingMutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({
           gmail: "owner@yahoo.com",
+        })
+      );
+    });
+  });
+
+  it("lets the resident edit hasInspectionCompany while rescheduling and submits the updated value", async () => {
+    verificationResult.existingBookings = [
+      {
+        id: 901,
+        linkId: 30,
+        slotId: 999,
+        bookingType: "initial",
+        status: "booked",
+        gmail: "owner@example.com",
+        hasInspectionCompany: true,
+        internalNote: null,
+        createdAtMs: 1,
+        updatedAtMs: 1,
+        slotDate: new Date("2026-05-18T00:00:00.000Z"),
+        startLabel: "14:00",
+        endLabel: "15:30",
+      },
+    ];
+
+    render(<Home />);
+
+    fireEvent.change(screen.getByLabelText("標準戶號"), { target: { value: "A1-01" } });
+    fireEvent.change(screen.getByLabelText("手機號碼"), { target: { value: "0912345678" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "進行住戶驗證" })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText("你已完成預約")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "修改日期" }));
+
+    expect(screen.getByRole("checkbox").getAttribute("data-state")).toBe("checked");
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getAllByText("點選後顯示該日期仍可改期的時段")[0].closest("button") as HTMLElement);
+    fireEvent.click(screen.getByText("剩餘 2 名").closest("button") as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "確認修改日期" }));
+
+    await waitFor(() => {
+      expect(rescheduleBookingMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bookingId: 901,
+          residentId: 88,
+          currentSlotId: 999,
+          newSlotId: 101,
+          hasInspectionCompany: false,
         })
       );
     });
