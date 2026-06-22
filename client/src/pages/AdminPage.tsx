@@ -3,6 +3,7 @@ import { formatDateInTaipei, formatDateTimeInTaipei, getDateKeyInTaipei } from "
 import { redirectToAdminDashboardAfterLogin } from "@/lib/adminRedirect";
 import { DEFAULT_SLOT_PRESETS, createProjectSlug } from "@/lib/adminConfig";
 import { buildBookingLinkUrlMap, filterResidentsByProject, findUnbookedResidentsForProject } from "@/lib/adminDashboard";
+import { downloadBookingListWorkbook } from "@/lib/bookingExport";
 import { getProjectsForCompany, parsePositiveId, validateResidentForm } from "@/lib/adminForms";
 import { buildPresetSlotPayloads, createEditableSlotPresets, createEmptySlotForm, filterSlotsByLink, getLinksForProject, validateSingleSlotForm } from "@/lib/slotForms";
 import { validateBookingLinkForm } from "@/lib/linkForm";
@@ -21,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, LockKeyhole, Building2, CalendarRange, ClipboardList, Users, ArrowRightLeft, ArrowLeft, Copy, ExternalLink } from "lucide-react";
+import { Loader2, LockKeyhole, Building2, CalendarRange, ClipboardList, Users, ArrowRightLeft, ArrowLeft, Copy, ExternalLink, Printer } from "lucide-react";
 import { toast } from "sonner";
 const formatDateTime = formatDateTimeInTaipei;
 const formatDateOnly = formatDateInTaipei;
@@ -89,6 +90,7 @@ export default function AdminPage() {
   const [assistedBookingForm, setAssistedBookingForm] = useState({ residentId: "", linkId: "", slotDate: "", slotId: "", note: "", gmail: "", hasInspectionCompany: false });
   const [residentListProjectId, setResidentListProjectId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link" | "slot"; id: number; label: string; step: 1 | 2 }>(null);
+  const [isDownloadingBookingList, setIsDownloadingBookingList] = useState(false);
 
   const adminProfile = trpc.adminAuth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
   const dashboardQuery = trpc.admin.dashboard.useQuery(undefined, {
@@ -620,6 +622,23 @@ export default function AdminPage() {
     });
   };
 
+  const downloadBookingList = async () => {
+    if (!bookings.length) {
+      toast.error("目前篩選條件下沒有可下載的預約紀錄");
+      return;
+    }
+
+    try {
+      setIsDownloadingBookingList(true);
+      await downloadBookingListWorkbook(bookings);
+      toast.success("預約清單已開始下載");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "下載預約清單失敗");
+    } finally {
+      setIsDownloadingBookingList(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
 
@@ -1091,7 +1110,15 @@ export default function AdminPage() {
                 </Card>
 
                 <Card>
-                  <CardHeader><CardTitle>預約紀錄</CardTitle></CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between gap-4">
+                    <div>
+                      <CardTitle>預約紀錄</CardTitle>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={downloadBookingList} disabled={isDownloadingBookingList || !bookings.length}>
+                      {isDownloadingBookingList ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                      下載預約清單
+                    </Button>
+                  </CardHeader>
                   <CardContent className="overflow-x-auto">
                       <AdminBookingRecordsTable
                       bookings={bookings}

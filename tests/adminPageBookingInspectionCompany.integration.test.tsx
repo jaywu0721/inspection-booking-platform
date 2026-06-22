@@ -4,7 +4,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookingMutate } = vi.hoisted(() => {
+const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookingMutate, downloadBookingListWorkbookMock } = vi.hoisted(() => {
   const createDashboardData = () => ({
     companies: [{ id: 10, name: "鷁欣建設" }],
     projects: [{ id: 20, companyId: 10, name: "A1" }],
@@ -131,6 +131,7 @@ const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookin
     searchBookingsUseQuery: vi.fn(),
     bookingAvailabilityUseQuery: vi.fn(),
     createBookingMutate: vi.fn(),
+    downloadBookingListWorkbookMock: vi.fn(),
   };
 });
 
@@ -140,6 +141,10 @@ vi.mock("../client/src/lib/adminRedirect", () => ({
 
 vi.mock("../client/src/hooks/useRescheduleAvailabilitySync", () => ({
   useRescheduleAvailabilitySync: () => ({ syncOnDropdownOpen: vi.fn() }),
+}));
+
+vi.mock("../client/src/lib/bookingExport", () => ({
+  downloadBookingListWorkbook: downloadBookingListWorkbookMock,
 }));
 
 vi.mock("../client/src/components/ui/tabs", () => ({
@@ -277,6 +282,8 @@ describe("AdminPage booking inspection company integration", () => {
     searchBookingsUseQuery.mockClear();
     bookingAvailabilityUseQuery.mockClear();
     createBookingMutate.mockClear();
+    downloadBookingListWorkbookMock.mockReset();
+    downloadBookingListWorkbookMock.mockResolvedValue(undefined);
   });
 
   it("renders the inspection company column from trpc searchBookings data", () => {
@@ -306,6 +313,23 @@ describe("AdminPage booking inspection company integration", () => {
     expect(bookingTable).toBeTruthy();
     expect(within(bookingTable as HTMLElement).getByText("12F-1")).toBeTruthy();
     expect(within(bookingTable as HTMLElement).queryByText("12F-2")).toBeNull();
+  });
+
+  it("downloads the booking list from the currently filtered booking records", async () => {
+    render(<AdminPage />);
+
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[0], { target: { value: "20" } });
+    fireEvent.change(selects[1], { target: { value: "30" } });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "下載預約清單" })[0]);
+
+    await waitFor(() => {
+      expect(downloadBookingListWorkbookMock).toHaveBeenCalledTimes(1);
+    });
+    expect(downloadBookingListWorkbookMock).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 1, linkId: 30, unitNumberSnapshot: "12F-1" }),
+    ]);
   });
 
   it("requires selecting a link and shows unfinished residents for that link only", () => {
