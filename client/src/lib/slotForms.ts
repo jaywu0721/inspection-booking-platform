@@ -199,8 +199,11 @@ export function buildPresetSlotPayloads(
   for (const preset of presets) {
     const startLabel = preset.startLabel.trim();
     const endLabel = preset.endLabel.trim();
+    if (!startLabel && !endLabel) {
+      continue;
+    }
     if (!startLabel || !endLabel) {
-      return { ok: false as const, message: "每一筆預設時段都必須填寫起訖時間" };
+      return { ok: false as const, message: `預設時段「${startLabel || "?"}–${endLabel || "?"}」起訖時間不完整，請補齊或清空` };
     }
 
     const key = `${startLabel}-${endLabel}`;
@@ -219,6 +222,10 @@ export function buildPresetSlotPayloads(
         isActive: input.isActive,
       });
     }
+  }
+
+  if (payloads.length === 0) {
+    return { ok: false as const, message: "請至少填寫一筆有效的預設時段" };
   }
 
   return { ok: true as const, payloads };

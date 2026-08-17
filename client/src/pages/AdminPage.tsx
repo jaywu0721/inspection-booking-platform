@@ -956,7 +956,7 @@ export default function AdminPage() {
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div>
                           <p className="text-sm font-medium">快速建立常用時段</p>
-                          <p className="mt-2 text-sm text-muted-foreground">單一日期模式會建立一天的四筆常用時段；日期區間模式則會直接把同一組預設時段套用到區間內每一天。這樣做的風險是如果你沒先確認日期區間，就會一次建立很多筆，所以區間起訖一定要先看清楚。</p>
+                          <p className="mt-2 text-sm text-muted-foreground">不需要四筆全填，只要有填的時段就會建立，空白的會自動跳過。日期區間模式會把同一組時段套用到區間內每一天，所以區間起訖一定要先看清楚。</p>
                         </div>
                         <Button type="button" variant="outline" size="sm" onClick={resetEditableSlotPresets}>重設本次預設</Button>
                       </div>
