@@ -355,9 +355,11 @@ async function getSlotUsage(projectId: number) {
 }
 
 function isPublicSelectableSlot(slotDate: Date, remaining: number) {
-  const today = new Date();
-  const startOfTodayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  return new Date(slotDate).getTime() >= startOfTodayMs && remaining > 0;
+  // 使用 Asia/Taipei 時區取得「明天 00:00」作為最早可預約時間
+  // 當日與已過日期一律排除，即使連結仍在開放期間
+  const nowInTaipei = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+  const tomorrowMs = new Date(nowInTaipei.getFullYear(), nowInTaipei.getMonth(), nowInTaipei.getDate() + 1).getTime();
+  return new Date(slotDate).getTime() >= tomorrowMs && remaining > 0;
 }
 
 async function lockRowForUpdate(tx: { execute?: (query: unknown) => Promise<unknown> }, tableName: "bookings" | "bookingSlots", id: number) {
@@ -1107,6 +1109,7 @@ export async function rescheduleBookingRecord(input: {
   fullMessage?: string;
   slotUnavailableMessage?: string;
   bookingNotFoundMessage?: string;
+  slotDateValidator?: (slotDate: Date) => void;
 }) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
@@ -1148,6 +1151,10 @@ export async function rescheduleBookingRecord(input: {
 
     if (input.requiredLinkId && newSlot.linkId !== input.requiredLinkId) {
       throw new Error(input.slotUnavailableMessage ?? "新時段不存在或已停用");
+    }
+
+    if (input.slotDateValidator) {
+      input.slotDateValidator(newSlot.slotDate);
     }
 
     const [usage] = await tx
@@ -1225,5 +1232,10 @@ export async function publicRescheduleBookingRecord(input: PublicSiteLinkInput &
     sameSlotMessage: "您目前已預約此時段",
     staleMessage: "預約資料已更新，請重新整理後再試",
     fullMessage: "該時段已無剩餘名額",
+    slotDateValidator: (slotDate: Date) => {
+      if (!isPublicSelectableSlot(slotDate, 1)) {
+        throw new Error("無法改期至當日或已過期的時段");
+      }
+    },
   });
 }

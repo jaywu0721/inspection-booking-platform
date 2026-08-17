@@ -53,7 +53,7 @@ const { captured, fakeDb } = vi.hoisted(() => {
     companyId: 10,
     projectId: 20,
     linkId: 30,
-    slotDate: new Date("2026-06-02T00:00:00.000Z"),
+    slotDate: new Date("2099-06-02T00:00:00.000Z"),
     startLabel: "10:30",
     endLabel: "12:00",
     capacity: 2,
@@ -405,5 +405,46 @@ describe("publicRescheduleBookingRecord", () => {
         staleMessage: "預約資料已更新，請重新整理後再試",
       })
     ).rejects.toThrow("預約資料已更新，請重新整理後再試");
+  });
+
+  it("rejects customer reschedule to a slot on today or in the past", async () => {
+    // Set the new slot date to today (Asia/Taipei)
+    const now = new Date();
+    const todayInTaipei = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+    const todayUtcNoon = new Date(Date.UTC(todayInTaipei.getFullYear(), todayInTaipei.getMonth(), todayInTaipei.getDate(), 12, 0, 0));
+    const newSlot = captured.slotRowById.get(41)!;
+    captured.slotRowById.set(41, { ...newSlot, slotDate: todayUtcNoon });
+
+    await expect(
+      dbModule.publicRescheduleBookingRecord({
+        companySlug: "eagle",
+        projectSlug: "a1",
+        type: "initial",
+        residentId: 50,
+        bookingId: 900,
+        currentSlotId: 40,
+        newSlotId: 41,
+      })
+    ).rejects.toThrow("無法改期至當日或已過期的時段");
+  });
+
+  it("allows admin reschedule to a slot on today (admin is not restricted)", async () => {
+    const now = new Date();
+    const todayInTaipei = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+    const todayUtcNoon = new Date(Date.UTC(todayInTaipei.getFullYear(), todayInTaipei.getMonth(), todayInTaipei.getDate(), 12, 0, 0));
+    const newSlot = captured.slotRowById.get(41)!;
+    captured.slotRowById.set(41, { ...newSlot, slotDate: todayUtcNoon });
+
+    const bookingId = await dbModule.rescheduleBookingRecord({
+      bookingId: 900,
+      newSlotId: 41,
+      changedBy: "admin-user",
+    });
+
+    expect(bookingId).toBe(900);
+    expect(captured.updatedBookingPayload).toMatchObject({
+      slotId: 41,
+      status: "rescheduled",
+    });
   });
 });
