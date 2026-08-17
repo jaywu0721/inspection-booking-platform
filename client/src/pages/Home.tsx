@@ -74,6 +74,7 @@ export default function Home() {
   const [verificationResult, setVerificationResult] = useState<any>(null);
   const bookingSectionRef = useRef<HTMLDivElement | null>(null);
   const slotSelectionSectionRef = useRef<HTMLDivElement | null>(null);
+  const slotSectionTopRef = useRef<HTMLDivElement | null>(null);
 
   const siteQuery = trpc.publicSite.getContext.useQuery(params, {
     refetchOnWindowFocus: false,
@@ -90,7 +91,7 @@ export default function Home() {
       toast.success("驗證成功，已載入既有預約與可用時段");
       if (typeof window !== "undefined" && window.innerWidth < 1024) {
         window.requestAnimationFrame(() => {
-          bookingSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          slotSectionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
       }
     },
@@ -537,6 +538,7 @@ export default function Home() {
                     </div>
 
                       <div className="space-y-4">
+                        <div ref={slotSectionTopRef} />
                         <h3 className="font-semibold">{sameLinkExistingBooking ? "修改既有預約" : "選擇新的預約時段"}</h3>
                         {site.isExpired && !sameLinkExistingBooking ? (
                           <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">此預約連結已截止。你仍可完成住戶驗證查看既有預約紀錄，但目前不能再選擇新的日期或時段；若現在才要預約，請直接聯絡頁面上的窗口。</div>
