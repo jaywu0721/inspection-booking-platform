@@ -121,6 +121,7 @@ export const bookingSlots = mysqlTable("bookingSlots", {
   endLabel: varchar("endLabel", { length: 20 }).notNull(),
   capacity: int("capacity").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
+  isPrivate: boolean("isPrivate").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

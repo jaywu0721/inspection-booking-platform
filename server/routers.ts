@@ -324,13 +324,23 @@ export const appRouter = router({
       }),
     rescheduleBooking: publicProcedure
       .input(
-        z.object({
-          bookingId: z.number().int().positive(),
-          currentSlotId: z.number().int().positive().optional(),
-          newSlotId: z.number().int().positive(),
-          note: z.string().optional(),
-          hasInspectionCompany: z.boolean().optional(),
-        })
+        z
+          .object({
+            bookingId: z.number().int().positive(),
+            currentSlotId: z.number().int().positive().optional(),
+            newSlotId: z.number().int().positive().optional(),
+            customSlot: z
+              .object({
+                slotDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+                timeRange: z.string().min(1),
+              })
+              .optional(),
+            note: z.string().optional(),
+            hasInspectionCompany: z.boolean().optional(),
+          })
+          .refine(input => Boolean(input.newSlotId) !== Boolean(input.customSlot), {
+            message: "新時段與自訂時段必須擇一",
+          })
       )
       .mutation(async ({ ctx, input }) => {
         const session = requireAdmin(ctx.req.headers);

@@ -47,6 +47,7 @@ const { captured, fakeDb } = vi.hoisted(() => {
     endLabel: "10:30",
     capacity: 2,
     isActive: true,
+    isPrivate: false,
   };
   const newSlotRow = {
     id: 41,
@@ -58,6 +59,7 @@ const { captured, fakeDb } = vi.hoisted(() => {
     endLabel: "12:00",
     capacity: 2,
     isActive: true,
+    isPrivate: false,
   };
 
   const captured = {
@@ -69,6 +71,7 @@ const { captured, fakeDb } = vi.hoisted(() => {
       [41, newSlotRow],
     ]),
     slotUsageRows: [{ used: 0 }],
+    insertedPrivateSlotPayload: null as null | Record<string, unknown>,
     insertedReschedulePayload: null as null | Record<string, unknown>,
     updatedBookingPayload: null as null | Record<string, unknown>,
     updatedBookingWhere: null as unknown,
@@ -194,6 +197,9 @@ const { captured, fakeDb } = vi.hoisted(() => {
     insert(table: unknown) {
       return {
         values: async (payload: Record<string, unknown>) => {
+          if (table === bookingSlots) {
+            captured.insertedPrivateSlotPayload = payload;
+          }
           if (table === bookingReschedules) {
             captured.insertedReschedulePayload = payload;
           }
@@ -273,6 +279,7 @@ describe("publicRescheduleBookingRecord", () => {
       updatedAtMs: 1,
     };
     captured.slotUsageRows = [{ used: 0 }];
+    captured.insertedPrivateSlotPayload = null;
     captured.insertedReschedulePayload = null;
     captured.updatedBookingPayload = null;
     captured.updatedBookingWhere = null;
@@ -446,5 +453,55 @@ describe("publicRescheduleBookingRecord", () => {
       slotId: 41,
       status: "rescheduled",
     });
+  });
+
+  it("creates a private one-off slot when an admin reschedules with a custom date and time range", async () => {
+    const bookingId = await dbModule.rescheduleBookingRecord({
+      bookingId: 900,
+      expectedCurrentSlotId: 40,
+      customSlot: {
+        slotDate: "2099-06-03",
+        timeRange: "14:00-16:00",
+      },
+      note: "住戶另約時間",
+      changedBy: "admin-user",
+    });
+
+    expect(bookingId).toBe(900);
+    expect(captured.insertedPrivateSlotPayload).toMatchObject({
+      companyId: 10,
+      projectId: 20,
+      linkId: 30,
+      slotDate: new Date("2099-06-03T12:00:00.000Z"),
+      startLabel: "14:00",
+      endLabel: "16:00",
+      capacity: 1,
+      isActive: true,
+      isPrivate: true,
+    });
+    expect(captured.insertedReschedulePayload).toMatchObject({
+      bookingId: 900,
+      oldSlotId: 40,
+      newSlotId: 901,
+      note: "住戶另約時間",
+      changedBy: "admin-user",
+    });
+    expect(captured.updatedBookingPayload).toMatchObject({
+      slotId: 901,
+      status: "rescheduled",
+    });
+  });
+
+  it("does not allow a private one-off slot to be reused as a normal reschedule slot", async () => {
+    const privateSlot = captured.slotRowById.get(41)!;
+    captured.slotRowById.set(41, { ...privateSlot, isPrivate: true });
+
+    await expect(
+      dbModule.rescheduleBookingRecord({
+        bookingId: 900,
+        newSlotId: 41,
+        changedBy: "admin-user",
+      })
+    ).rejects.toThrow("新時段不存在或已停用");
   });
 });

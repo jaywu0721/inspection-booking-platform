@@ -362,6 +362,51 @@ function isPublicSelectableSlot(slotDate: Date, remaining: number) {
   return new Date(slotDate).getTime() >= tomorrowMs && remaining > 0;
 }
 
+function getTaipeiDateKey(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find(part => part.type === "year")?.value;
+  const month = parts.find(part => part.type === "month")?.value;
+  const day = parts.find(part => part.type === "day")?.value;
+  return year && month && day ? `${year}-${month}-${day}` : "";
+}
+
+export function parseAdminCustomSlot(input: { slotDate: string; timeRange: string }, now = new Date()) {
+  const slotDate = input.slotDate.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(slotDate)) {
+    throw new Error("客製日期格式不正確");
+  }
+
+  const [year, month, day] = slotDate.split("-").map(Number);
+  const parsedDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+  if (parsedDate.getUTCFullYear() !== year || parsedDate.getUTCMonth() !== month - 1 || parsedDate.getUTCDate() !== day) {
+    throw new Error("客製日期格式不正確");
+  }
+
+  if (slotDate < getTaipeiDateKey(now)) {
+    throw new Error("客製日期不可早於今天");
+  }
+
+  const match = input.timeRange.trim().match(/^([01]\d|2[0-3]):([0-5]\d)\s*-\s*([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!match) {
+    throw new Error("自訂時段格式須為 HH:mm-HH:mm，例如 14:00-16:00");
+  }
+
+  const startLabel = `${match[1]}:${match[2]}`;
+  const endLabel = `${match[3]}:${match[4]}`;
+  const startMinutes = Number(match[1]) * 60 + Number(match[2]);
+  const endMinutes = Number(match[3]) * 60 + Number(match[4]);
+  if (endMinutes <= startMinutes) {
+    throw new Error("自訂時段的結束時間必須晚於開始時間");
+  }
+
+  return { slotDate: parsedDate, startLabel, endLabel };
+}
+
 async function lockRowForUpdate(tx: { execute?: (query: unknown) => Promise<unknown> }, tableName: "bookings" | "bookingSlots", id: number) {
   if (typeof tx.execute !== "function") {
     return;
@@ -386,7 +431,7 @@ export async function getPublicSiteContext(input: PublicSiteLinkInput) {
   const slotRows = await db
     .select()
     .from(bookingSlots)
-    .where(and(eq(bookingSlots.projectId, row.project.id), eq(bookingSlots.linkId, row.link.id), eq(bookingSlots.isActive, true)))
+    .where(and(eq(bookingSlots.projectId, row.project.id), eq(bookingSlots.linkId, row.link.id), eq(bookingSlots.isActive, true), eq(bookingSlots.isPrivate, false)))
     .orderBy(asc(bookingSlots.slotDate), asc(bookingSlots.startLabel));
 
   const availableSlots = (isExpired ? [] : slotRows)
@@ -447,7 +492,7 @@ export async function getAdminBookingAvailability(linkId: number) {
   const slotRows = await db
     .select()
     .from(bookingSlots)
-    .where(and(eq(bookingSlots.linkId, site.link.id), eq(bookingSlots.isActive, true)))
+    .where(and(eq(bookingSlots.linkId, site.link.id), eq(bookingSlots.isActive, true), eq(bookingSlots.isPrivate, false)))
     .orderBy(asc(bookingSlots.slotDate), asc(bookingSlots.startLabel), asc(bookingSlots.endLabel));
 
   if (slotRows.length === 0) {
@@ -521,7 +566,7 @@ async function createBookingRecordForSite(input: {
   const [slot] = await db
     .select()
     .from(bookingSlots)
-    .where(and(eq(bookingSlots.id, input.slotId), eq(bookingSlots.projectId, input.project.id), eq(bookingSlots.linkId, input.link.id), eq(bookingSlots.isActive, true)))
+    .where(and(eq(bookingSlots.id, input.slotId), eq(bookingSlots.projectId, input.project.id), eq(bookingSlots.linkId, input.link.id), eq(bookingSlots.isActive, true), eq(bookingSlots.isPrivate, false)))
     .limit(1);
 
   if (!slot) {
@@ -556,7 +601,7 @@ async function createBookingRecordForSite(input: {
     const [lockedSlot] = await tx
       .select()
       .from(bookingSlots)
-      .where(and(eq(bookingSlots.id, slot.id), eq(bookingSlots.projectId, input.project.id), eq(bookingSlots.linkId, input.link.id), eq(bookingSlots.isActive, true)))
+      .where(and(eq(bookingSlots.id, slot.id), eq(bookingSlots.projectId, input.project.id), eq(bookingSlots.linkId, input.link.id), eq(bookingSlots.isActive, true), eq(bookingSlots.isPrivate, false)))
       .limit(1);
 
     if (!lockedSlot) {
@@ -705,7 +750,7 @@ export async function getAdminDashboardData() {
     db.select().from(projects).orderBy(desc(projects.createdAt)),
     db.select().from(residents).orderBy(desc(residents.createdAt)),
     db.select().from(bookingLinks).orderBy(desc(bookingLinks.createdAt)),
-    db.select().from(bookingSlots).where(sql`${bookingSlots.linkId} is not null`).orderBy(desc(bookingSlots.slotDate)),
+    db.select().from(bookingSlots).where(and(sql`${bookingSlots.linkId} is not null`, eq(bookingSlots.isPrivate, false))).orderBy(desc(bookingSlots.slotDate)),
     db.select().from(bookings).orderBy(desc(bookings.createdAtMs)),
     db.select().from(bookingReschedules).orderBy(desc(bookingReschedules.changedAtMs)),
   ]);
@@ -960,6 +1005,7 @@ export async function upsertBookingSlotRecord(input: {
     eq(bookingSlots.slotDate, input.slotDate),
     eq(bookingSlots.startLabel, input.startLabel),
     eq(bookingSlots.endLabel, input.endLabel),
+    eq(bookingSlots.isPrivate, false),
   ];
 
   if (input.id) {
@@ -1031,6 +1077,7 @@ export async function searchBookings(filters: {
       slotDate: bookingSlots.slotDate,
       startLabel: bookingSlots.startLabel,
       endLabel: bookingSlots.endLabel,
+      slotIsPrivate: bookingSlots.isPrivate,
     })
     .from(bookings)
     .innerJoin(companies, eq(companies.id, bookings.companyId))
@@ -1077,7 +1124,7 @@ export async function getAdminRescheduleAvailability(bookingId: number) {
   const slotRows = await db
     .select()
     .from(bookingSlots)
-    .where(and(eq(bookingSlots.linkId, booking.linkId), eq(bookingSlots.isActive, true)))
+    .where(and(eq(bookingSlots.linkId, booking.linkId), eq(bookingSlots.isActive, true), eq(bookingSlots.isPrivate, false)))
     .orderBy(asc(bookingSlots.slotDate), asc(bookingSlots.startLabel), asc(bookingSlots.endLabel));
 
   if (slotRows.length === 0) {
@@ -1097,7 +1144,11 @@ export async function getAdminRescheduleAvailability(bookingId: number) {
 
 export async function rescheduleBookingRecord(input: {
   bookingId: number;
-  newSlotId: number;
+  newSlotId?: number;
+  customSlot?: {
+    slotDate: string;
+    timeRange: string;
+  };
   note?: string;
   hasInspectionCompany?: boolean;
   changedBy: string;
@@ -1134,36 +1185,65 @@ export async function rescheduleBookingRecord(input: {
       throw new Error(input.staleMessage ?? "預約資料已更新，請重新整理後再試");
     }
 
+    if (!input.newSlotId && !input.customSlot) {
+      throw new Error("請選擇新時段或輸入自訂時段");
+    }
+
+    if (input.newSlotId && input.customSlot) {
+      throw new Error("新時段與自訂時段只能擇一");
+    }
+
     if (booking.slotId === input.newSlotId && input.sameSlotMessage) {
       throw new Error(input.sameSlotMessage);
     }
 
-    await lockRowForUpdate(tx as { execute?: (query: unknown) => Promise<unknown> }, "bookingSlots", input.newSlotId);
+    let targetSlotId: number;
 
-    const [newSlot] = await tx.select().from(bookingSlots).where(eq(bookingSlots.id, input.newSlotId)).limit(1);
-    if (!newSlot || !newSlot.isActive) {
-      throw new Error(input.slotUnavailableMessage ?? "新時段不存在或已停用");
-    }
+    if (input.customSlot) {
+      const customSlot = parseAdminCustomSlot(input.customSlot);
+      const inserted = await tx.insert(bookingSlots).values({
+        companyId: booking.companyId,
+        projectId: booking.projectId,
+        linkId: booking.linkId,
+        slotDate: customSlot.slotDate,
+        startLabel: customSlot.startLabel,
+        endLabel: customSlot.endLabel,
+        capacity: 1,
+        isActive: true,
+        isPrivate: true,
+      });
+      targetSlotId = Number(inserted[0].insertId);
+    } else {
+      const newSlotId = input.newSlotId as number;
+      await lockRowForUpdate(tx as { execute?: (query: unknown) => Promise<unknown> }, "bookingSlots", newSlotId);
 
-    if (booking.linkId && newSlot.linkId !== booking.linkId) {
-      throw new Error(input.slotUnavailableMessage ?? "新時段不存在或已停用");
-    }
+      const [newSlot] = await tx.select().from(bookingSlots).where(eq(bookingSlots.id, newSlotId)).limit(1);
+      if (!newSlot || !newSlot.isActive || newSlot.isPrivate) {
+        throw new Error(input.slotUnavailableMessage ?? "新時段不存在或已停用");
+      }
 
-    if (input.requiredLinkId && newSlot.linkId !== input.requiredLinkId) {
-      throw new Error(input.slotUnavailableMessage ?? "新時段不存在或已停用");
-    }
+      if (booking.linkId && newSlot.linkId !== booking.linkId) {
+        throw new Error(input.slotUnavailableMessage ?? "新時段不存在或已停用");
+      }
 
-    if (input.slotDateValidator) {
-      input.slotDateValidator(newSlot.slotDate);
-    }
+      if (input.requiredLinkId && newSlot.linkId !== input.requiredLinkId) {
+        throw new Error(input.slotUnavailableMessage ?? "新時段不存在或已停用");
+      }
 
-    const [usage] = await tx
-      .select({ used: count(bookings.id) })
-      .from(bookings)
-      .where(and(eq(bookings.slotId, newSlot.id), sql`${bookings.status} <> 'cancelled'`));
+      if (input.slotDateValidator) {
+        input.slotDateValidator(newSlot.slotDate);
+      }
 
-    if (!hasRescheduleCapacity(newSlot.capacity, Number(usage?.used ?? 0))) {
-      throw new Error(input.fullMessage ?? "新時段已額滿");
+      const [usage] = await tx
+        .select({ used: count(bookings.id) })
+        .from(bookings)
+        .where(and(eq(bookings.slotId, newSlot.id), sql`${bookings.status} <> 'cancelled'`));
+
+      if (!hasRescheduleCapacity(newSlot.capacity, Number(usage?.used ?? 0))) {
+        throw new Error(input.fullMessage ?? "新時段已額滿");
+      }
+
+      targetSlotId = newSlot.id;
     }
 
     const changedAtMs = nowMs();
@@ -1174,7 +1254,7 @@ export async function rescheduleBookingRecord(input: {
     await tx.insert(bookingReschedules).values({
       bookingId: booking.id,
       oldSlotId: booking.slotId,
-      newSlotId: newSlot.id,
+      newSlotId: targetSlotId,
       note: input.note ?? null,
       changedAtMs,
       changedBy: input.changedBy,
@@ -1183,7 +1263,7 @@ export async function rescheduleBookingRecord(input: {
     await tx
       .update(bookings)
       .set({
-        slotId: newSlot.id,
+        slotId: targetSlotId,
         status: "rescheduled",
         internalNote: input.note ?? null,
         hasInspectionCompany: nextHasInspectionCompany,

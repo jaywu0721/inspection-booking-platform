@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookingMutate, rescheduleBookingMutate, downloadBookingListWorkbookMock } = vi.hoisted(() => {
@@ -64,6 +64,7 @@ const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookin
       slotDate: new Date("2026-05-05T00:00:00.000Z"),
       startLabel: "09:00",
       endLabel: "10:30",
+      slotIsPrivate: false,
     },
     {
       id: 2,
@@ -85,6 +86,7 @@ const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookin
       slotDate: new Date("2026-05-06T00:00:00.000Z"),
       startLabel: "14:00",
       endLabel: "15:30",
+      slotIsPrivate: false,
     },
   ];
 
@@ -221,7 +223,8 @@ vi.mock("../client/src/lib/trpc", () => ({
           mutate: (input: {
             bookingId: number;
             currentSlotId?: number;
-            newSlotId: number;
+            newSlotId?: number;
+            customSlot?: { slotDate: string; timeRange: string };
             note?: string;
             hasInspectionCompany?: boolean;
           }) => {
@@ -272,6 +275,7 @@ vi.mock("../client/src/lib/trpc", () => ({
                 slotDate: new Date("2026-05-08T00:00:00.000Z"),
                 startLabel: "09:00",
                 endLabel: "10:30",
+                slotIsPrivate: false,
               },
             ];
             options?.onSuccess?.({ success: true, id: nextId });
@@ -292,6 +296,7 @@ import AdminPage from "../client/src/pages/AdminPage";
 
 describe("AdminPage booking inspection company integration", () => {
   beforeEach(() => {
+    cleanup();
     state.reset();
     searchBookingsUseQuery.mockClear();
     bookingAvailabilityUseQuery.mockClear();
@@ -358,6 +363,39 @@ describe("AdminPage booking inspection company integration", () => {
       newSlotId: 40,
       note: "改期一次",
       hasInspectionCompany: true,
+    });
+  });
+
+  it("allows an admin to reschedule with a custom date and a one-field custom time range", () => {
+    render(<AdminPage />);
+
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[0], { target: { value: "20" } });
+    fireEvent.change(selects[1], { target: { value: "31" } });
+
+    const bookingTable = screen.getAllByRole("table").find(table => within(table).queryByText("是否驗屋公司"));
+    expect(bookingTable).toBeTruthy();
+    const bookingRow = within((within(bookingTable as HTMLElement).getByText("12F-2").closest("tr") as HTMLElement).closest("tr") as HTMLElement);
+    fireEvent.click(bookingRow.getByRole("button", { name: "編輯改期" }));
+
+    expect(screen.getByRole("option", { name: "客製日期" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("新日期"), { target: { value: "__custom_date__" } });
+    fireEvent.change(screen.getByLabelText("客製日期"), { target: { value: "2099-06-03" } });
+
+    expect(screen.getByRole("option", { name: "自訂時段" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("新時段"), { target: { value: "__custom_slot__" } });
+    fireEvent.change(screen.getByLabelText("自訂時段"), { target: { value: "14:00-16:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "確認改期" }));
+
+    expect(rescheduleBookingMutate).toHaveBeenCalledWith({
+      bookingId: 2,
+      currentSlotId: 41,
+      customSlot: {
+        slotDate: "2099-06-03",
+        timeRange: "14:00-16:00",
+      },
+      note: "改期一次",
+      hasInspectionCompany: false,
     });
   });
 

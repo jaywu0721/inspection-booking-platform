@@ -24,6 +24,7 @@ export type AdminBookingRecordRow = {
   slotDate: Date;
   startLabel: string;
   endLabel: string;
+  slotIsPrivate: boolean;
 };
 
 export type AdminBookingDateOption = { value: string; label: string };
@@ -45,7 +46,15 @@ export function formatInspectionCompanyLabel(hasInspectionCompany: boolean) {
 type Props = {
   bookings: AdminBookingRecordRow[];
   editingBookingId: string;
-  rescheduleForm: { slotDate: string; newSlotId: string; note: string; hasInspectionCompany: boolean };
+  rescheduleForm: {
+    slotDate: string;
+    customDate: string;
+    newSlotId: string;
+    customTimeRange: string;
+    note: string;
+    hasInspectionCompany: boolean;
+  };
+  minCustomDate: string;
   dateOptions: AdminBookingDateOption[];
   slotOptions: AdminBookingSlotOption[];
   isFetching: boolean;
@@ -53,7 +62,9 @@ type Props = {
   isSubmitting: boolean;
   onStartEditing: (booking: AdminBookingRecordRow) => void;
   onChangeDate: (nextDate: string) => void;
+  onChangeCustomDate: (customDate: string) => void;
   onChangeSlot: (newSlotId: string) => void;
+  onChangeCustomTimeRange: (timeRange: string) => void;
   onChangeNote: (note: string) => void;
   onChangeHasInspectionCompany: (hasInspectionCompany: boolean) => void;
   onSyncAvailability: () => void;
@@ -65,6 +76,7 @@ export function AdminBookingRecordsTable({
   bookings,
   editingBookingId,
   rescheduleForm,
+  minCustomDate,
   dateOptions,
   slotOptions,
   isFetching,
@@ -72,7 +84,9 @@ export function AdminBookingRecordsTable({
   isSubmitting,
   onStartEditing,
   onChangeDate,
+  onChangeCustomDate,
   onChangeSlot,
+  onChangeCustomTimeRange,
   onChangeNote,
   onChangeHasInspectionCompany,
   onSyncAvailability,
@@ -123,7 +137,10 @@ export function AdminBookingRecordsTable({
                 <TableCell colSpan={8} className="bg-muted/20">
                   <AdminRescheduleFields
                     slotDate={rescheduleForm.slotDate}
+                    customDate={rescheduleForm.customDate}
                     newSlotId={rescheduleForm.newSlotId}
+                    customTimeRange={rescheduleForm.customTimeRange}
+                    minCustomDate={minCustomDate}
                     note={rescheduleForm.note}
                     hasInspectionCompany={rescheduleForm.hasInspectionCompany}
                     dateOptions={dateOptions}
@@ -132,7 +149,9 @@ export function AdminBookingRecordsTable({
                     errorMessage={errorMessage}
                     isSubmitting={isSubmitting}
                     onChangeDate={onChangeDate}
+                    onChangeCustomDate={onChangeCustomDate}
                     onChangeSlot={onChangeSlot}
+                    onChangeCustomTimeRange={onChangeCustomTimeRange}
                     onChangeNote={onChangeNote}
                     onChangeHasInspectionCompany={onChangeHasInspectionCompany}
                     onSyncAvailability={onSyncAvailability}

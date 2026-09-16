@@ -8,6 +8,7 @@ import { getProjectsForCompany, parsePositiveId, validateResidentForm } from "@/
 import { buildPresetSlotPayloads, createEditableSlotPresets, createEmptySlotForm, filterSlotsByLink, getLinksForProject, validateSingleSlotForm } from "@/lib/slotForms";
 import { validateBookingLinkForm } from "@/lib/linkForm";
 import { buildCompanyFormFromRecord, createEmptyCompanyForm } from "@/lib/companyEditor";
+import { CUSTOM_DATE_OPTION_VALUE, CUSTOM_SLOT_OPTION_VALUE, getTaipeiTodayDateKey, validateAdminCustomTimeRange } from "@/lib/adminCustomReschedule";
 import { useRescheduleAvailabilitySync } from "@/hooks/useRescheduleAvailabilitySync";
 import { trpc } from "@/lib/trpc";
 import { AdminRescheduleFields } from "@/components/AdminRescheduleFields";
@@ -86,7 +87,7 @@ export default function AdminPage() {
   const [editableSlotPresets, setEditableSlotPresets] = useState(createEditableSlotPresets());
   const [bookingFilters, setBookingFilters] = useState({ projectId: "", linkId: "", unitNumber: "", bookingType: "all", status: "all", bookingDate: "" });
   const [showUnbookedResidents, setShowUnbookedResidents] = useState(false);
-  const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "", hasInspectionCompany: false });
+  const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", currentSlotId: "", slotDate: "", customDate: "", newSlotId: "", customTimeRange: "", note: "", hasInspectionCompany: false });
   const [assistedBookingForm, setAssistedBookingForm] = useState({ residentId: "", linkId: "", slotDate: "", slotId: "", note: "", gmail: "", hasInspectionCompany: false });
   const [residentListProjectId, setResidentListProjectId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link" | "slot"; id: number; label: string; step: 1 | 2 }>(null);
@@ -225,7 +226,7 @@ export default function AdminPage() {
     onSuccess: async () => {
       toast.success("預約已完成改期");
       await refreshAll();
-      setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "", hasInspectionCompany: false });
+      setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", customDate: "", newSlotId: "", customTimeRange: "", note: "", hasInspectionCompany: false });
     },
     onError: error => toast.error(error.message),
   });
@@ -311,9 +312,13 @@ export default function AdminPage() {
     () => unbookedResidents.find(resident => String(resident.id) === assistedBookingForm.residentId) ?? null,
     [unbookedResidents, assistedBookingForm.residentId]
   );
+  const minCustomRescheduleDate = getTaipeiTodayDateKey();
+  const effectiveRescheduleDate = rescheduleForm.slotDate === CUSTOM_DATE_OPTION_VALUE
+    ? rescheduleForm.customDate
+    : rescheduleForm.slotDate;
   const { syncOnDropdownOpen: syncRescheduleAvailability } = useRescheduleAvailabilitySync({
     resourceId: rescheduleForm.bookingId,
-    slotDate: rescheduleForm.slotDate,
+    slotDate: effectiveRescheduleDate,
     refetch: rescheduleAvailabilityQuery.refetch,
   });
   const { syncOnDropdownOpen: syncAssistedBookingAvailability } = useRescheduleAvailabilitySync({
@@ -334,9 +339,9 @@ export default function AdminPage() {
     }, []);
   }, [rescheduleAvailability]);
   const rescheduleSlotOptions = useMemo(() => {
-    if (!rescheduleForm.slotDate) return [] as typeof rescheduleAvailability;
-    return rescheduleAvailability.filter(slot => getDateKey(slot.slotDate) === rescheduleForm.slotDate);
-  }, [rescheduleAvailability, rescheduleForm.slotDate]);
+    if (!effectiveRescheduleDate) return [] as typeof rescheduleAvailability;
+    return rescheduleAvailability.filter(slot => getDateKey(slot.slotDate) === effectiveRescheduleDate);
+  }, [effectiveRescheduleDate, rescheduleAvailability]);
   const assistedBookingDateOptions = useMemo(() => {
     const seen = new Set<string>();
     return assistedBookingAvailability.reduce<Array<{ value: string; label: string }>>((result, slot) => {
@@ -425,18 +430,21 @@ export default function AdminPage() {
   };
 
   const startEditingBooking = (booking: typeof bookings[number]) => {
+    const bookingDate = getDateKey(booking.slotDate);
     setRescheduleForm({
       bookingId: String(booking.id),
       currentSlotId: String(booking.slotId),
-      slotDate: getDateKey(booking.slotDate),
+      slotDate: booking.slotIsPrivate ? CUSTOM_DATE_OPTION_VALUE : bookingDate,
+      customDate: booking.slotIsPrivate ? bookingDate : "",
       newSlotId: "",
+      customTimeRange: "",
       note: booking.internalNote || "",
       hasInspectionCompany: booking.hasInspectionCompany,
     });
   };
 
   const cancelEditingBooking = () => {
-    setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", newSlotId: "", note: "", hasInspectionCompany: false });
+    setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", customDate: "", newSlotId: "", customTimeRange: "", note: "", hasInspectionCompany: false });
   };
 
   const startAssistedBooking = (resident: typeof unbookedResidents[number]) => {
@@ -461,7 +469,7 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    if (!rescheduleForm.newSlotId) return;
+    if (!rescheduleForm.newSlotId || rescheduleForm.newSlotId === CUSTOM_SLOT_OPTION_VALUE) return;
 
     const selectedSlot = rescheduleSlotOptions.find(slot => String(slot.id) === rescheduleForm.newSlotId);
     if (selectedSlot && selectedSlot.remaining > 0) return;
@@ -606,12 +614,38 @@ export default function AdminPage() {
       toast.error("請先選擇要改期的預約紀錄");
       return;
     }
-    if (!rescheduleForm.slotDate) {
+    if (!effectiveRescheduleDate) {
       toast.error("請先選擇新的預約日期");
       return;
     }
+
+    if (rescheduleForm.slotDate === CUSTOM_DATE_OPTION_VALUE && effectiveRescheduleDate < minCustomRescheduleDate) {
+      toast.error("客製日期不可早於今天");
+      return;
+    }
+
     if (!rescheduleForm.newSlotId) {
       toast.error("請先選擇新的預約時段");
+      return;
+    }
+
+    if (rescheduleForm.newSlotId === CUSTOM_SLOT_OPTION_VALUE) {
+      const validation = validateAdminCustomTimeRange(rescheduleForm.customTimeRange);
+      if (!validation.ok) {
+        toast.error(validation.message);
+        return;
+      }
+
+      rescheduleMutation.mutate({
+        bookingId: Number(rescheduleForm.bookingId),
+        currentSlotId: rescheduleForm.currentSlotId ? Number(rescheduleForm.currentSlotId) : undefined,
+        customSlot: {
+          slotDate: effectiveRescheduleDate,
+          timeRange: validation.value,
+        },
+        note: rescheduleForm.note || undefined,
+        hasInspectionCompany: rescheduleForm.hasInspectionCompany,
+      });
       return;
     }
 
@@ -1126,14 +1160,17 @@ export default function AdminPage() {
                       bookings={bookings}
                       editingBookingId={rescheduleForm.bookingId}
                       rescheduleForm={rescheduleForm}
+                      minCustomDate={minCustomRescheduleDate}
                       dateOptions={rescheduleDateOptions}
                       slotOptions={rescheduleSlotOptions}
                       isFetching={rescheduleAvailabilityQuery.isFetching}
                       errorMessage={rescheduleAvailabilityQuery.error?.message}
                       isSubmitting={rescheduleMutation.isPending}
                       onStartEditing={startEditingBooking}
-                      onChangeDate={nextDate => setRescheduleForm(current => ({ ...current, slotDate: nextDate, newSlotId: "" }))}
-                      onChangeSlot={newSlotId => setRescheduleForm(current => ({ ...current, newSlotId }))}
+                      onChangeDate={nextDate => setRescheduleForm(current => ({ ...current, slotDate: nextDate, customDate: "", newSlotId: "", customTimeRange: "" }))}
+                      onChangeCustomDate={customDate => setRescheduleForm(current => ({ ...current, customDate, newSlotId: "", customTimeRange: "" }))}
+                      onChangeSlot={newSlotId => setRescheduleForm(current => ({ ...current, newSlotId, customTimeRange: newSlotId === CUSTOM_SLOT_OPTION_VALUE ? current.customTimeRange : "" }))}
+                      onChangeCustomTimeRange={customTimeRange => setRescheduleForm(current => ({ ...current, customTimeRange }))}
                       onChangeNote={note => setRescheduleForm(current => ({ ...current, note }))}
                       onChangeHasInspectionCompany={hasInspectionCompany => setRescheduleForm(current => ({ ...current, hasInspectionCompany }))}
                       onSyncAvailability={syncRescheduleAvailability}

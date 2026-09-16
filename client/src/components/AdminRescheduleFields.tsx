@@ -1,5 +1,6 @@
 import React from "react";
 import { triggerRescheduleAvailabilitySync } from "@/lib/adminRescheduleInteractions";
+import { CUSTOM_DATE_OPTION_VALUE, CUSTOM_SLOT_OPTION_VALUE } from "@/lib/adminCustomReschedule";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,10 @@ type SlotOption = {
 
 type Props = {
   slotDate: string;
+  customDate: string;
   newSlotId: string;
+  customTimeRange: string;
+  minCustomDate: string;
   note: string;
   hasInspectionCompany: boolean;
   dateOptions: DateOption[];
@@ -30,7 +34,9 @@ type Props = {
   errorMessage?: string;
   isSubmitting: boolean;
   onChangeDate: (slotDate: string) => void;
+  onChangeCustomDate: (customDate: string) => void;
   onChangeSlot: (slotId: string) => void;
+  onChangeCustomTimeRange: (timeRange: string) => void;
   onChangeNote: (note: string) => void;
   onChangeHasInspectionCompany: (hasInspectionCompany: boolean) => void;
   onSyncAvailability: () => void;
@@ -40,7 +46,10 @@ type Props = {
 
 export function AdminRescheduleFields({
   slotDate,
+  customDate,
   newSlotId,
+  customTimeRange,
+  minCustomDate,
   note,
   hasInspectionCompany,
   dateOptions,
@@ -49,7 +58,9 @@ export function AdminRescheduleFields({
   errorMessage,
   isSubmitting,
   onChangeDate,
+  onChangeCustomDate,
   onChangeSlot,
+  onChangeCustomTimeRange,
   onChangeNote,
   onChangeHasInspectionCompany,
   onSyncAvailability,
@@ -72,7 +83,18 @@ export function AdminRescheduleFields({
               {option.label}
             </option>
           ))}
+          <option value={CUSTOM_DATE_OPTION_VALUE}>客製日期</option>
         </select>
+        {slotDate === CUSTOM_DATE_OPTION_VALUE ? (
+          <Input
+            id="admin-reschedule-custom-date"
+            type="date"
+            min={minCustomDate}
+            value={customDate}
+            onChange={event => onChangeCustomDate(event.target.value)}
+            aria-label="客製日期"
+          />
+        ) : null}
       </div>
 
       <div className="space-y-2">
@@ -86,19 +108,38 @@ export function AdminRescheduleFields({
           onPointerDown={() => triggerRescheduleAvailabilitySync(onSyncAvailability)}
           onClick={() => triggerRescheduleAvailabilitySync(onSyncAvailability)}
           onChange={event => onChangeSlot(event.target.value)}
-          disabled={!slotDate}
+          disabled={!slotDate || (slotDate === CUSTOM_DATE_OPTION_VALUE && !customDate)}
         >
           <option value="">
-            {!slotDate ? "請先選日期" : isFetching && slotOptions.length === 0 ? "同步餘額中..." : "請選擇"}
+            {!slotDate || (slotDate === CUSTOM_DATE_OPTION_VALUE && !customDate)
+              ? "請先選日期"
+              : isFetching && slotOptions.length === 0
+                ? "同步餘額中..."
+                : "請選擇"}
           </option>
           {slotOptions.map(slot => (
             <option key={slot.id} value={slot.id} disabled={slot.remaining <= 0}>
               {`${slot.startLabel}-${slot.endLabel} / 餘額 ${slot.remaining}${slot.isCurrentSlot ? " / 目前時段" : ""}`}
             </option>
           ))}
+          <option value={CUSTOM_SLOT_OPTION_VALUE}>自訂時段</option>
         </select>
+        {newSlotId === CUSTOM_SLOT_OPTION_VALUE ? (
+          <Input
+            id="admin-reschedule-custom-time"
+            value={customTimeRange}
+            onChange={event => onChangeCustomTimeRange(event.target.value)}
+            placeholder="例如 14:00-16:00"
+            inputMode="text"
+            aria-label="自訂時段"
+          />
+        ) : null}
         <p className="text-xs text-muted-foreground">
-          {isFetching ? "正在同步最新餘額..." : "展開下拉時會再次同步該日期各時段的最新餘額。"}
+          {newSlotId === CUSTOM_SLOT_OPTION_VALUE
+            ? "自訂時段只供這一筆預約使用，不會顯示在客戶前台。"
+            : isFetching
+              ? "正在同步最新餘額..."
+              : "展開下拉時會再次同步該日期各時段的最新餘額。"}
         </p>
         {errorMessage ? <p className="text-xs text-destructive">{errorMessage}</p> : null}
       </div>
