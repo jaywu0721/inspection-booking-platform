@@ -88,7 +88,7 @@ export default function AdminPage() {
   const [bookingFilters, setBookingFilters] = useState({ projectId: "", linkId: "", unitNumber: "", bookingType: "all", status: "all", bookingDate: "" });
   const [showUnbookedResidents, setShowUnbookedResidents] = useState(false);
   const [rescheduleForm, setRescheduleForm] = useState({ bookingId: "", currentSlotId: "", slotDate: "", customDate: "", newSlotId: "", customTimeRange: "", note: "", hasInspectionCompany: false });
-  const [assistedBookingForm, setAssistedBookingForm] = useState({ residentId: "", linkId: "", slotDate: "", slotId: "", note: "", gmail: "", hasInspectionCompany: false });
+  const [assistedBookingForm, setAssistedBookingForm] = useState({ residentId: "", linkId: "", slotDate: "", customDate: "", slotId: "", customTimeRange: "", note: "", gmail: "", hasInspectionCompany: false });
   const [residentListProjectId, setResidentListProjectId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link" | "slot"; id: number; label: string; step: 1 | 2 }>(null);
   const [isDownloadingBookingList, setIsDownloadingBookingList] = useState(false);
@@ -243,7 +243,7 @@ export default function AdminPage() {
     onSuccess: async () => {
       toast.success("已完成代客預約，住戶將移出未完成名單");
       await refreshAll();
-      setAssistedBookingForm({ residentId: "", linkId: "", slotDate: "", slotId: "", note: "", gmail: "", hasInspectionCompany: false });
+      setAssistedBookingForm({ residentId: "", linkId: "", slotDate: "", customDate: "", slotId: "", customTimeRange: "", note: "", gmail: "", hasInspectionCompany: false });
     },
     onError: error => toast.error(error.message),
   });
@@ -324,6 +324,9 @@ export default function AdminPage() {
   const effectiveRescheduleDate = rescheduleForm.slotDate === CUSTOM_DATE_OPTION_VALUE
     ? rescheduleForm.customDate
     : rescheduleForm.slotDate;
+  const effectiveAssistedBookingDate = assistedBookingForm.slotDate === CUSTOM_DATE_OPTION_VALUE
+    ? assistedBookingForm.customDate
+    : assistedBookingForm.slotDate;
   const { syncOnDropdownOpen: syncRescheduleAvailability } = useRescheduleAvailabilitySync({
     resourceId: rescheduleForm.bookingId,
     slotDate: effectiveRescheduleDate,
@@ -331,7 +334,7 @@ export default function AdminPage() {
   });
   const { syncOnDropdownOpen: syncAssistedBookingAvailability } = useRescheduleAvailabilitySync({
     resourceId: assistedBookingForm.linkId,
-    slotDate: assistedBookingForm.slotDate,
+    slotDate: effectiveAssistedBookingDate,
     refetch: bookingAvailabilityQuery.refetch,
   });
   const rescheduleAvailability = rescheduleAvailabilityQuery.data ?? [];
@@ -361,9 +364,9 @@ export default function AdminPage() {
     }, []);
   }, [assistedBookingAvailability]);
   const assistedBookingSlotOptions = useMemo(() => {
-    if (!assistedBookingForm.slotDate) return [] as typeof assistedBookingAvailability;
-    return assistedBookingAvailability.filter(slot => getDateKey(slot.slotDate) === assistedBookingForm.slotDate);
-  }, [assistedBookingAvailability, assistedBookingForm.slotDate]);
+    if (!effectiveAssistedBookingDate) return [] as typeof assistedBookingAvailability;
+    return assistedBookingAvailability.filter(slot => getDateKey(slot.slotDate) === effectiveAssistedBookingDate);
+  }, [assistedBookingAvailability, effectiveAssistedBookingDate]);
   const isDeleting = companyDeleteMutation.isPending || projectDeleteMutation.isPending || residentDeleteMutation.isPending || linkDeleteMutation.isPending || slotDeleteMutation.isPending;
 
   useEffect(() => {
@@ -375,7 +378,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!assistedBookingForm.residentId) return;
     if (bookingFilters.linkId && assistedBookingForm.linkId === bookingFilters.linkId) return;
-    setAssistedBookingForm({ residentId: "", linkId: "", slotDate: "", slotId: "", note: "", gmail: "", hasInspectionCompany: false });
+    setAssistedBookingForm({ residentId: "", linkId: "", slotDate: "", customDate: "", slotId: "", customTimeRange: "", note: "", gmail: "", hasInspectionCompany: false });
   }, [bookingFilters.linkId, assistedBookingForm.residentId, assistedBookingForm.linkId]);
 
   const startEditingCompany = (company: typeof companies[number]) => {
@@ -467,7 +470,9 @@ export default function AdminPage() {
       residentId: String(resident.id),
       linkId: bookingFilters.linkId,
       slotDate: "",
+      customDate: "",
       slotId: "",
+      customTimeRange: "",
       note: "",
       gmail: "",
       hasInspectionCompany: false,
@@ -475,7 +480,7 @@ export default function AdminPage() {
   };
 
   const cancelAssistedBooking = () => {
-    setAssistedBookingForm({ residentId: "", linkId: "", slotDate: "", slotId: "", note: "", gmail: "", hasInspectionCompany: false });
+    setAssistedBookingForm({ residentId: "", linkId: "", slotDate: "", customDate: "", slotId: "", customTimeRange: "", note: "", gmail: "", hasInspectionCompany: false });
   };
 
   useEffect(() => {
@@ -488,7 +493,7 @@ export default function AdminPage() {
   }, [rescheduleForm.newSlotId, rescheduleSlotOptions]);
 
   useEffect(() => {
-    if (!assistedBookingForm.slotId) return;
+    if (!assistedBookingForm.slotId || assistedBookingForm.slotId === CUSTOM_SLOT_OPTION_VALUE) return;
 
     const selectedSlot = assistedBookingSlotOptions.find(slot => String(slot.id) === assistedBookingForm.slotId);
     if (selectedSlot && selectedSlot.remaining > 0) return;
@@ -507,8 +512,34 @@ export default function AdminPage() {
       return;
     }
 
-    if (!assistedBookingForm.slotDate || !assistedBookingForm.slotId) {
+    if (!effectiveAssistedBookingDate || !assistedBookingForm.slotId) {
       toast.error("請選擇預約日期與時段");
+      return;
+    }
+
+    if (assistedBookingForm.slotDate === CUSTOM_DATE_OPTION_VALUE && effectiveAssistedBookingDate < minCustomRescheduleDate) {
+      toast.error("客製日期不可早於今天");
+      return;
+    }
+
+    if (assistedBookingForm.slotId === CUSTOM_SLOT_OPTION_VALUE) {
+      const validation = validateAdminCustomTimeRange(assistedBookingForm.customTimeRange);
+      if (!validation.ok) {
+        toast.error(validation.message);
+        return;
+      }
+
+      createBookingMutation.mutate({
+        linkId: Number(bookingFilters.linkId),
+        residentId: Number(assistedBookingForm.residentId),
+        customSlot: {
+          slotDate: effectiveAssistedBookingDate,
+          timeRange: validation.value,
+        },
+        note: assistedBookingForm.note || undefined,
+        gmail: assistedBookingForm.gmail,
+        hasInspectionCompany: assistedBookingForm.hasInspectionCompany,
+      });
       return;
     }
 
@@ -1119,7 +1150,10 @@ export default function AdminPage() {
                                       <TableCell colSpan={5} className="bg-muted/20">
                                         <AdminAssistedBookingFields
                                           slotDate={assistedBookingForm.slotDate}
+                                          customDate={assistedBookingForm.customDate}
                                           slotId={assistedBookingForm.slotId}
+                                          customTimeRange={assistedBookingForm.customTimeRange}
+                                          minCustomDate={minCustomRescheduleDate}
                                           note={assistedBookingForm.note}
                                           gmail={assistedBookingForm.gmail}
                                           hasInspectionCompany={assistedBookingForm.hasInspectionCompany}
@@ -1128,8 +1162,10 @@ export default function AdminPage() {
                                           isFetching={bookingAvailabilityQuery.isFetching}
                                           errorMessage={bookingAvailabilityQuery.error?.message}
                                           isSubmitting={createBookingMutation.isPending}
-                                          onChangeDate={slotDate => setAssistedBookingForm(current => ({ ...current, slotDate, slotId: "" }))}
-                                          onChangeSlot={slotId => setAssistedBookingForm(current => ({ ...current, slotId }))}
+                                          onChangeDate={slotDate => setAssistedBookingForm(current => ({ ...current, slotDate, customDate: "", slotId: "", customTimeRange: "" }))}
+                                          onChangeCustomDate={customDate => setAssistedBookingForm(current => ({ ...current, customDate, slotId: "", customTimeRange: "" }))}
+                                          onChangeSlot={slotId => setAssistedBookingForm(current => ({ ...current, slotId, customTimeRange: slotId === CUSTOM_SLOT_OPTION_VALUE ? current.customTimeRange : "" }))}
+                                          onChangeCustomTimeRange={customTimeRange => setAssistedBookingForm(current => ({ ...current, customTimeRange }))}
                                           onChangeNote={note => setAssistedBookingForm(current => ({ ...current, note }))}
                                           onChangeGmail={gmail => setAssistedBookingForm(current => ({ ...current, gmail }))}
                                           onChangeHasInspectionCompany={hasInspectionCompany =>

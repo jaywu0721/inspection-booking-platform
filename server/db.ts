@@ -540,7 +540,11 @@ async function createBookingRecordForSite(input: {
   link: { id: number; type: "initial" | "reinspect" };
   isExpired: boolean;
   residentId: number;
-  slotId: number;
+  slotId?: number;
+  customSlot?: {
+    slotDate: string;
+    timeRange: string;
+  };
   gmail: string;
   hasInspectionCompany: boolean;
   internalNote?: string | null;
@@ -554,6 +558,10 @@ async function createBookingRecordForSite(input: {
     throw new Error("此預約連結已截止");
   }
 
+  if (Boolean(input.slotId) === Boolean(input.customSlot)) {
+    throw new Error("預約時段與自訂時段必須擇一");
+  }
+
   const [resident] = await db.select().from(residents).where(eq(residents.id, input.residentId)).limit(1);
   if (!resident) {
     throw new Error("住戶資料不存在");
@@ -563,13 +571,16 @@ async function createBookingRecordForSite(input: {
     throw new Error("此住戶不屬於目前建案，不能使用這個預約連結");
   }
 
-  const [slot] = await db
-    .select()
-    .from(bookingSlots)
-    .where(and(eq(bookingSlots.id, input.slotId), eq(bookingSlots.projectId, input.project.id), eq(bookingSlots.linkId, input.link.id), eq(bookingSlots.isActive, true), eq(bookingSlots.isPrivate, false)))
-    .limit(1);
+  const customSlot = input.customSlot ? parseAdminCustomSlot(input.customSlot) : null;
+  const [slot] = input.slotId
+    ? await db
+        .select()
+        .from(bookingSlots)
+        .where(and(eq(bookingSlots.id, input.slotId), eq(bookingSlots.projectId, input.project.id), eq(bookingSlots.linkId, input.link.id), eq(bookingSlots.isActive, true), eq(bookingSlots.isPrivate, false)))
+        .limit(1)
+    : [];
 
-  if (!slot) {
+  if (input.slotId && !slot) {
     throw new Error("選擇的時段不存在或已停用");
   }
 
@@ -596,26 +607,44 @@ async function createBookingRecordForSite(input: {
       throw new Error(buildExistingBookingErrorMessage(existing, input.duplicateSource));
     }
 
-    await lockRowForUpdate(tx as { execute?: (query: unknown) => Promise<unknown> }, "bookingSlots", slot.id);
+    let targetSlotId: number;
+    if (customSlot) {
+      const insertedPrivateSlot = await tx.insert(bookingSlots).values({
+        companyId: input.company.id,
+        projectId: input.project.id,
+        linkId: input.link.id,
+        slotDate: customSlot.slotDate,
+        startLabel: customSlot.startLabel,
+        endLabel: customSlot.endLabel,
+        capacity: 1,
+        isActive: true,
+        isPrivate: true,
+        uniquenessScope: randomUUID().replace(/-/g, ""),
+      });
+      targetSlotId = Number(insertedPrivateSlot[0].insertId);
+    } else {
+      await lockRowForUpdate(tx as { execute?: (query: unknown) => Promise<unknown> }, "bookingSlots", slot!.id);
 
-    const [lockedSlot] = await tx
-      .select()
-      .from(bookingSlots)
-      .where(and(eq(bookingSlots.id, slot.id), eq(bookingSlots.projectId, input.project.id), eq(bookingSlots.linkId, input.link.id), eq(bookingSlots.isActive, true), eq(bookingSlots.isPrivate, false)))
-      .limit(1);
+      const [lockedSlot] = await tx
+        .select()
+        .from(bookingSlots)
+        .where(and(eq(bookingSlots.id, slot!.id), eq(bookingSlots.projectId, input.project.id), eq(bookingSlots.linkId, input.link.id), eq(bookingSlots.isActive, true), eq(bookingSlots.isPrivate, false)))
+        .limit(1);
 
-    if (!lockedSlot) {
-      throw new Error("選擇的時段不存在或已停用");
-    }
+      if (!lockedSlot) {
+        throw new Error("選擇的時段不存在或已停用");
+      }
 
-    const [slotUsage] = await tx
-      .select({ used: count(bookings.id) })
-      .from(bookings)
-      .where(and(eq(bookings.slotId, lockedSlot.id), sql`${bookings.status} <> 'cancelled'`));
+      const [slotUsage] = await tx
+        .select({ used: count(bookings.id) })
+        .from(bookings)
+        .where(and(eq(bookings.slotId, lockedSlot.id), sql`${bookings.status} <> 'cancelled'`));
 
-    const used = Number(slotUsage?.used ?? 0);
-    if (used >= lockedSlot.capacity) {
-      throw new Error("該時段已額滿，請改選其他時段");
+      const used = Number(slotUsage?.used ?? 0);
+      if (used >= lockedSlot.capacity) {
+        throw new Error("該時段已額滿，請改選其他時段");
+      }
+      targetSlotId = lockedSlot.id;
     }
 
     const createdAt = nowMs();
@@ -624,7 +653,7 @@ async function createBookingRecordForSite(input: {
       projectId: input.project.id,
       linkId: input.link.id,
       residentId: resident.id,
-      slotId: lockedSlot.id,
+      slotId: targetSlotId,
       bookingType: input.link.type,
       unitNumberSnapshot: resident.unitNumber,
       phoneNumberSnapshot: resident.phoneNumber,
@@ -723,7 +752,11 @@ export async function createBookingRecord(input: PublicSiteLinkInput & {
 export async function createAdminBookingRecord(input: {
   linkId: number;
   residentId: number;
-  slotId: number;
+  slotId?: number;
+  customSlot?: {
+    slotDate: string;
+    timeRange: string;
+  };
   gmail: string;
   hasInspectionCompany: boolean;
   note?: string;
@@ -733,6 +766,7 @@ export async function createAdminBookingRecord(input: {
     ...site,
     residentId: input.residentId,
     slotId: input.slotId,
+    customSlot: input.customSlot,
     gmail: input.gmail,
     hasInspectionCompany: input.hasInspectionCompany,
     internalNote: input.note ?? null,

@@ -354,14 +354,24 @@ export const appRouter = router({
       }),
     createBooking: publicProcedure
       .input(
-        z.object({
-          linkId: z.number().int().positive(),
-          residentId: z.number().int().positive(),
-          slotId: z.number().int().positive(),
-          gmail: bookingEmailSchema,
-          hasInspectionCompany: z.boolean(),
-          note: z.string().optional(),
-        })
+        z
+          .object({
+            linkId: z.number().int().positive(),
+            residentId: z.number().int().positive(),
+            slotId: z.number().int().positive().optional(),
+            customSlot: z
+              .object({
+                slotDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+                timeRange: z.string().min(1),
+              })
+              .optional(),
+            gmail: bookingEmailSchema,
+            hasInspectionCompany: z.boolean(),
+            note: z.string().optional(),
+          })
+          .refine(input => Boolean(input.slotId) !== Boolean(input.customSlot), {
+            message: "預約時段與自訂時段必須擇一",
+          })
       )
       .mutation(async ({ ctx, input }) => {
         requireAdmin(ctx.req.headers);

@@ -235,7 +235,7 @@ vi.mock("../client/src/lib/trpc", () => ({
       },
       createBooking: {
         useMutation: (options?: { onSuccess?: (data: { success: true; id: number }) => void }) => ({
-          mutate: (input: { linkId: number; residentId: number; slotId: number; gmail: string; hasInspectionCompany: boolean; note?: string }) => {
+          mutate: (input: { linkId: number; residentId: number; slotId?: number; customSlot?: { slotDate: string; timeRange: string }; gmail: string; hasInspectionCompany: boolean; note?: string }) => {
             createBookingMutate(input);
             const resident = state.currentDashboardData.residents.find(item => item.id === input.residentId);
             const project = resident ? state.currentDashboardData.projects.find(item => item.id === resident.projectId) : undefined;
@@ -260,7 +260,7 @@ vi.mock("../client/src/lib/trpc", () => ({
                 companyId: company.id,
                 projectId: project.id,
                 linkId: input.linkId,
-                slotId: input.slotId,
+                slotId: input.slotId ?? 999,
                 companyName: company.name,
                 projectName: project.name,
                 bookingType: link.type,
@@ -272,10 +272,10 @@ vi.mock("../client/src/lib/trpc", () => ({
                 internalNote: input.note ?? null,
                 createdAtMs: 3,
                 updatedAtMs: 3,
-                slotDate: new Date("2026-05-08T00:00:00.000Z"),
-                startLabel: "09:00",
-                endLabel: "10:30",
-                slotIsPrivate: false,
+                slotDate: input.customSlot ? new Date(`${input.customSlot.slotDate}T12:00:00.000Z`) : new Date("2026-05-08T00:00:00.000Z"),
+                startLabel: input.customSlot?.timeRange.split("-")[0] ?? "09:00",
+                endLabel: input.customSlot?.timeRange.split("-")[1] ?? "10:30",
+                slotIsPrivate: Boolean(input.customSlot),
               },
             ];
             options?.onSuccess?.({ success: true, id: nextId });
@@ -489,5 +489,43 @@ describe("AdminPage booking inspection company integration", () => {
     expect(within(refreshedUnbookedTable as HTMLElement).queryByText("12F-3")).toBeNull();
     expect(within(refreshedUnbookedTable as HTMLElement).getByText("12F-1")).toBeTruthy();
     expect(screen.getAllByText("12F-3").length).toBeGreaterThan(0);
+  });
+
+  it("allows assisted booking with a custom date and a one-field private custom time range", () => {
+    render(<AdminPage />);
+
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[0], { target: { value: "20" } });
+    fireEvent.change(selects[1], { target: { value: "31" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "查看未完成預約住戶" })[0]);
+
+    const unbookedTable = screen
+      .getAllByRole("table")
+      .find(table => within(table).queryByText("備註") && within(table).queryByText("已取消後未補約"));
+    expect(unbookedTable).toBeTruthy();
+
+    const residentRow = within(unbookedTable as HTMLElement).getAllByRole("row").find(row => within(row).queryByText("12F-3"));
+    expect(residentRow).toBeTruthy();
+    fireEvent.click(within(residentRow as HTMLElement).getByRole("button", { name: "代客預約" }));
+
+    expect(screen.getByRole("option", { name: "客製日期" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("預約日期"), { target: { value: "__custom_date__" } });
+    fireEvent.change(screen.getByLabelText("客製日期"), { target: { value: "2099-06-03" } });
+    expect(screen.getByRole("option", { name: "自訂時段" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("預約時段"), { target: { value: "__custom_slot__" } });
+    fireEvent.change(screen.getByLabelText("自訂時段"), { target: { value: "14:00-16:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "確認代客預約" }));
+
+    expect(createBookingMutate).toHaveBeenCalledWith({
+      linkId: 31,
+      residentId: 203,
+      customSlot: {
+        slotDate: "2099-06-03",
+        timeRange: "14:00-16:00",
+      },
+      note: undefined,
+      gmail: "",
+      hasInspectionCompany: false,
+    });
   });
 });

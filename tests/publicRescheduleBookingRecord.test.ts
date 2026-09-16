@@ -72,13 +72,14 @@ const { captured, fakeDb } = vi.hoisted(() => {
     ]),
     slotUsageRows: [{ used: 0 }],
     insertedPrivateSlotPayload: null as null | Record<string, unknown>,
+    insertedBookingPayload: null as null | Record<string, unknown>,
     insertedReschedulePayload: null as null | Record<string, unknown>,
     updatedBookingPayload: null as null | Record<string, unknown>,
     updatedBookingWhere: null as unknown,
   };
 
   const makeSelectChain = (selection?: unknown) => {
-    let mode: "active-link" | "resident" | "booking" | "slot" | "slot-capacity" | "slot-usage-map" | null = null;
+    let mode: "active-link" | "admin-link" | "resident" | "booking" | "slot" | "slot-capacity" | "slot-usage-map" | null = null;
 
     const hasKeys = (keys: string[]) => Boolean(selection && typeof selection === "object" && keys.every(key => key in (selection as Record<string, unknown>)));
 
@@ -88,6 +89,7 @@ const { captured, fakeDb } = vi.hoisted(() => {
 
     const chain = {
       from(table?: unknown) {
+        if (table === bookingLinks && mode === "active-link") mode = "admin-link";
         if (table === residents) mode = "resident";
         if (table === bookings) {
           mode = mode === "slot-capacity" || mode === "slot-usage-map" ? mode : "booking";
@@ -115,6 +117,7 @@ const { captured, fakeDb } = vi.hoisted(() => {
       },
       limit() {
         if (mode === "active-link") return Promise.resolve([captured.siteRow]);
+        if (mode === "admin-link") return Promise.resolve([captured.siteRow]);
         if (mode === "resident") return Promise.resolve([captured.residentRow]);
         if (mode === "booking") return Promise.resolve([captured.bookingRow]);
         if (mode === "slot") {
@@ -200,6 +203,9 @@ const { captured, fakeDb } = vi.hoisted(() => {
           if (table === bookingSlots) {
             captured.insertedPrivateSlotPayload = payload;
           }
+          if (table === bookings) {
+            captured.insertedBookingPayload = payload;
+          }
           if (table === bookingReschedules) {
             captured.insertedReschedulePayload = payload;
           }
@@ -280,6 +286,7 @@ describe("publicRescheduleBookingRecord", () => {
     };
     captured.slotUsageRows = [{ used: 0 }];
     captured.insertedPrivateSlotPayload = null;
+    captured.insertedBookingPayload = null;
     captured.insertedReschedulePayload = null;
     captured.updatedBookingPayload = null;
     captured.updatedBookingWhere = null;
@@ -504,5 +511,44 @@ describe("publicRescheduleBookingRecord", () => {
         changedBy: "admin-user",
       })
     ).rejects.toThrow("新時段不存在或已停用");
+  });
+
+  it("creates a private one-off slot when an admin makes an assisted booking with a custom date and time range", async () => {
+    const bookingId = await dbModule.createAdminBookingRecord({
+      linkId: 30,
+      residentId: 50,
+      customSlot: {
+        slotDate: "2099-06-03",
+        timeRange: "14:00-16:00",
+      },
+      gmail: "owner@example.com",
+      hasInspectionCompany: true,
+      note: "後台代客安排",
+    });
+
+    expect(bookingId).toBe(901);
+    expect(captured.insertedPrivateSlotPayload).toMatchObject({
+      companyId: 10,
+      projectId: 20,
+      linkId: 30,
+      slotDate: new Date("2099-06-03T12:00:00.000Z"),
+      startLabel: "14:00",
+      endLabel: "16:00",
+      capacity: 1,
+      isActive: true,
+      isPrivate: true,
+      uniquenessScope: expect.stringMatching(/^[a-f0-9]{32}$/),
+    });
+    expect(captured.insertedBookingPayload).toMatchObject({
+      companyId: 10,
+      projectId: 20,
+      linkId: 30,
+      residentId: 50,
+      slotId: 901,
+      bookingType: "initial",
+      internalNote: "後台代客安排",
+      hasInspectionCompany: true,
+      status: "booked",
+    });
   });
 });
