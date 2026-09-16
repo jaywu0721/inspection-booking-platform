@@ -386,7 +386,9 @@ describe("AdminPage booking inspection company integration", () => {
     fireEvent.change(screen.getByLabelText("新時段"), { target: { value: "__custom_slot__" } });
     fireEvent.change(screen.getByLabelText("自訂時段"), { target: { value: "14:00-16:00" } });
     fireEvent.click(screen.getByRole("button", { name: "確認改期" }));
+    fireEvent.click(screen.getByRole("button", { name: "確認改期" }));
 
+    expect(rescheduleBookingMutate).toHaveBeenCalledTimes(1);
     expect(rescheduleBookingMutate).toHaveBeenCalledWith({
       bookingId: 2,
       currentSlotId: 41,

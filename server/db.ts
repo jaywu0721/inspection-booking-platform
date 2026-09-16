@@ -1211,6 +1211,7 @@ export async function rescheduleBookingRecord(input: {
         capacity: 1,
         isActive: true,
         isPrivate: true,
+        uniquenessScope: randomUUID().replace(/-/g, ""),
       });
       targetSlotId = Number(inserted[0].insertId);
     } else {

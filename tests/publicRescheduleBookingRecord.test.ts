@@ -478,6 +478,7 @@ describe("publicRescheduleBookingRecord", () => {
       capacity: 1,
       isActive: true,
       isPrivate: true,
+      uniquenessScope: expect.stringMatching(/^[a-f0-9]{32}$/),
     });
     expect(captured.insertedReschedulePayload).toMatchObject({
       bookingId: 900,

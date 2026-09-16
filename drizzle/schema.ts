@@ -111,20 +111,33 @@ export const residents = mysqlTable(
   })
 );
 
-export const bookingSlots = mysqlTable("bookingSlots", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  projectId: int("projectId").notNull(),
-  linkId: int("linkId"),
-  slotDate: timestamp("slotDate").notNull(),
-  startLabel: varchar("startLabel", { length: 20 }).notNull(),
-  endLabel: varchar("endLabel", { length: 20 }).notNull(),
-  capacity: int("capacity").notNull(),
-  isActive: boolean("isActive").default(true).notNull(),
-  isPrivate: boolean("isPrivate").default(false).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+export const bookingSlots = mysqlTable(
+  "bookingSlots",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    companyId: int("companyId").notNull(),
+    projectId: int("projectId").notNull(),
+    linkId: int("linkId"),
+    slotDate: timestamp("slotDate").notNull(),
+    startLabel: varchar("startLabel", { length: 20 }).notNull(),
+    endLabel: varchar("endLabel", { length: 20 }).notNull(),
+    capacity: int("capacity").notNull(),
+    isActive: boolean("isActive").default(true).notNull(),
+    isPrivate: boolean("isPrivate").default(false).notNull(),
+    uniquenessScope: varchar("uniquenessScope", { length: 64 }).default("public").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    linkDateTimeScopeUnique: uniqueIndex("booking_slots_link_datetime_scope_unique").on(
+      table.linkId,
+      table.slotDate,
+      table.startLabel,
+      table.endLabel,
+      table.uniquenessScope
+    ),
+  })
+);
 
 export const bookings = mysqlTable("bookings", {
   id: int("id").autoincrement().primaryKey(),

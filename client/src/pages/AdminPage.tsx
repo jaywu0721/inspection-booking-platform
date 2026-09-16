@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { formatDateInTaipei, formatDateTimeInTaipei, getDateKeyInTaipei } from "@/lib/dateHelpers";
 import { redirectToAdminDashboardAfterLogin } from "@/lib/adminRedirect";
 import { DEFAULT_SLOT_PRESETS, createProjectSlug } from "@/lib/adminConfig";
@@ -92,6 +92,7 @@ export default function AdminPage() {
   const [residentListProjectId, setResidentListProjectId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "company" | "project" | "resident" | "link" | "slot"; id: number; label: string; step: 1 | 2 }>(null);
   const [isDownloadingBookingList, setIsDownloadingBookingList] = useState(false);
+  const rescheduleSubmitLockedRef = useRef(false);
 
   const adminProfile = trpc.adminAuth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
   const dashboardQuery = trpc.admin.dashboard.useQuery(undefined, {
@@ -225,10 +226,17 @@ export default function AdminPage() {
   const rescheduleMutation = trpc.admin.rescheduleBooking.useMutation({
     onSuccess: async () => {
       toast.success("預約已完成改期");
-      await refreshAll();
-      setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", customDate: "", newSlotId: "", customTimeRange: "", note: "", hasInspectionCompany: false });
+      try {
+        await refreshAll();
+        setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", customDate: "", newSlotId: "", customTimeRange: "", note: "", hasInspectionCompany: false });
+      } finally {
+        rescheduleSubmitLockedRef.current = false;
+      }
     },
-    onError: error => toast.error(error.message),
+    onError: error => {
+      rescheduleSubmitLockedRef.current = false;
+      toast.error(error.message);
+    },
   });
 
   const createBookingMutation = trpc.admin.createBooking.useMutation({
@@ -430,6 +438,7 @@ export default function AdminPage() {
   };
 
   const startEditingBooking = (booking: typeof bookings[number]) => {
+    rescheduleSubmitLockedRef.current = false;
     const bookingDate = getDateKey(booking.slotDate);
     setRescheduleForm({
       bookingId: String(booking.id),
@@ -444,6 +453,7 @@ export default function AdminPage() {
   };
 
   const cancelEditingBooking = () => {
+    rescheduleSubmitLockedRef.current = false;
     setRescheduleForm({ bookingId: "", currentSlotId: "", slotDate: "", customDate: "", newSlotId: "", customTimeRange: "", note: "", hasInspectionCompany: false });
   };
 
@@ -610,6 +620,7 @@ export default function AdminPage() {
   };
 
   const submitReschedule = () => {
+    if (rescheduleSubmitLockedRef.current) return;
     if (!rescheduleForm.bookingId) {
       toast.error("請先選擇要改期的預約紀錄");
       return;
@@ -636,6 +647,7 @@ export default function AdminPage() {
         return;
       }
 
+      rescheduleSubmitLockedRef.current = true;
       rescheduleMutation.mutate({
         bookingId: Number(rescheduleForm.bookingId),
         currentSlotId: rescheduleForm.currentSlotId ? Number(rescheduleForm.currentSlotId) : undefined,
@@ -649,6 +661,7 @@ export default function AdminPage() {
       return;
     }
 
+    rescheduleSubmitLockedRef.current = true;
     rescheduleMutation.mutate({
       bookingId: Number(rescheduleForm.bookingId),
       currentSlotId: rescheduleForm.currentSlotId ? Number(rescheduleForm.currentSlotId) : undefined,
