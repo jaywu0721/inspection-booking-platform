@@ -1,10 +1,11 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { adminCredentials, bookingLinks, bookingReschedules, bookings, bookingSlots, companies, projects, statisticOptions, statisticResponses } from "../drizzle/schema";
+import { adminCredentials, bookingLinks, bookingReschedules, bookings, bookingSlots, companies, projects, statisticOptions, statisticResponseHistory, statisticResponses } from "../drizzle/schema";
 
 const { captured, fakeDb } = vi.hoisted(() => {
   const captured = {
     searchWhere: undefined as unknown,
     bookingRows: [{ id: 101 }, { id: 102 }] as Array<{ id: number }>,
+    statisticResponseRows: [] as Array<{ id: number }>,
     searchResult: [
       {
         id: 1,
@@ -67,8 +68,8 @@ const { captured, fakeDb } = vi.hoisted(() => {
         if (isSingleIdSelection && fromTable === bookings) {
           return Promise.resolve(captured.bookingRows);
         }
-        if (fromTable === statisticResponses) {
-          return Promise.resolve([{ used: 0 }]);
+        if (isSingleIdSelection && fromTable === statisticResponses) {
+          return Promise.resolve(captured.statisticResponseRows);
         }
         if (fromTable === bookings) {
           captured.searchWhere = condition;
@@ -147,6 +148,7 @@ describe("booking link cascade and filter rules", () => {
   beforeEach(() => {
     captured.searchWhere = undefined;
     captured.bookingRows = [{ id: 101 }, { id: 102 }];
+    captured.statisticResponseRows = [];
     captured.deletes = [];
   });
 
@@ -186,5 +188,18 @@ describe("booking link cascade and filter rules", () => {
     expect(captured.deletes[2]).toMatchObject({ table: bookingSlots, condition: { type: "eq", left: bookingSlots.linkId, right: 77 } });
     expect(captured.deletes[3]).toMatchObject({ table: statisticOptions, condition: { type: "eq", left: statisticOptions.linkId, right: 77 } });
     expect(captured.deletes[4]).toMatchObject({ table: bookingLinks, condition: { type: "eq", left: bookingLinks.id, right: 77 } });
+  });
+
+  it("permanently deletes a statistics link together with its responses and response history", async () => {
+    captured.statisticResponseRows = [{ id: 401 }, { id: 402 }];
+
+    await dbModule.deleteBookingLinkRecord(77);
+
+    expect(captured.deletes).toHaveLength(7);
+    expect(captured.deletes[2]).toMatchObject({ table: statisticResponseHistory, condition: { type: "inArray", left: statisticResponseHistory.responseId, right: [401, 402] } });
+    expect(captured.deletes[3]).toMatchObject({ table: statisticResponses, condition: { type: "eq", left: statisticResponses.linkId, right: 77 } });
+    expect(captured.deletes[4]).toMatchObject({ table: bookingSlots, condition: { type: "eq", left: bookingSlots.linkId, right: 77 } });
+    expect(captured.deletes[5]).toMatchObject({ table: statisticOptions, condition: { type: "eq", left: statisticOptions.linkId, right: 77 } });
+    expect(captured.deletes[6]).toMatchObject({ table: bookingLinks, condition: { type: "eq", left: bookingLinks.id, right: 77 } });
   });
 });

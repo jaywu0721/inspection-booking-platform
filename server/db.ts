@@ -1539,25 +1539,26 @@ export async function deleteBookingLinkRecord(linkId: number) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
-  const [statisticsUsage] = await db
-    .select({ used: count(statisticResponses.id) })
-    .from(statisticResponses)
-    .where(eq(statisticResponses.linkId, linkId));
-  if (Number(statisticsUsage?.used ?? 0) > 0) {
-    throw new Error("此統計連結已有回覆或歷程，不能刪除；請改用停止連結保留資料");
-  }
-
   await db.transaction(async tx => {
     const bookingRows = await tx
       .select({ id: bookings.id })
       .from(bookings)
       .where(eq(bookings.linkId, linkId));
+    const statisticResponseRows = await tx
+      .select({ id: statisticResponses.id })
+      .from(statisticResponses)
+      .where(eq(statisticResponses.linkId, linkId));
 
     const bookingIds = bookingRows.map(row => row.id);
+    const statisticResponseIds = statisticResponseRows.map(row => row.id);
 
     if (bookingIds.length > 0) {
       await tx.delete(bookingReschedules).where(inArray(bookingReschedules.bookingId, bookingIds));
       await tx.delete(bookings).where(inArray(bookings.id, bookingIds));
+    }
+    if (statisticResponseIds.length > 0) {
+      await tx.delete(statisticResponseHistory).where(inArray(statisticResponseHistory.responseId, statisticResponseIds));
+      await tx.delete(statisticResponses).where(eq(statisticResponses.linkId, linkId));
     }
 
     await tx.delete(bookingSlots).where(eq(bookingSlots.linkId, linkId));
