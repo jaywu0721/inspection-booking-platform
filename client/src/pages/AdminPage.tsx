@@ -62,6 +62,17 @@ function createEmptyLinkForm() {
   };
 }
 
+function createEmptyResidentForm() {
+  return {
+    id: undefined as number | undefined,
+    companyId: "",
+    projectId: "",
+    unitNumber: "",
+    phoneNumber: "",
+    name: "",
+  };
+}
+
 export default function AdminPage() {
 
   const utils = trpc.useUtils();
@@ -75,13 +86,8 @@ export default function AdminPage() {
     houseNumberExample: "",
     address: "",
   });
-  const [residentForm, setResidentForm] = useState({
-    companyId: "",
-    projectId: "",
-    unitNumber: "",
-    phoneNumber: "",
-    note: "",
-  });
+  const [residentForm, setResidentForm] = useState(createEmptyResidentForm());
+  const [residentFormMode, setResidentFormMode] = useState<"new" | "edit" | "add-contact">("new");
   const [linkForm, setLinkForm] = useState(createEmptyLinkForm());
   const [slotForm, setSlotForm] = useState(createEmptySlotForm());
   const [selectedSlotLinkId, setSelectedSlotLinkId] = useState("");
@@ -185,10 +191,11 @@ export default function AdminPage() {
   });
 
   const residentMutation = trpc.admin.saveResident.useMutation({
-    onSuccess: async () => {
-      toast.success("住戶資料已儲存");
+    onSuccess: async (_data, variables) => {
+      toast.success(variables.id ? "住戶聯絡資料已更新" : "住戶聯絡資料已儲存");
       await refreshAll();
-      setResidentForm({ companyId: "", projectId: "", unitNumber: "", phoneNumber: "", note: "" });
+      setResidentForm(createEmptyResidentForm());
+      setResidentFormMode("new");
     },
     onError: error => {
       const isMissingSelectionError = error.message.includes("companyId") || error.message.includes("projectId");
@@ -413,6 +420,41 @@ export default function AdminPage() {
 
   const cancelEditingLink = () => {
     setLinkForm(createEmptyLinkForm());
+  };
+
+  const startEditingResident = (resident: typeof residents[number]) => {
+    setResidentForm({
+      id: resident.id,
+      companyId: String(resident.companyId),
+      projectId: String(resident.projectId),
+      unitNumber: resident.unitNumber,
+      phoneNumber: resident.phoneNumber,
+      name: resident.name ?? "",
+    });
+    setResidentFormMode("edit");
+    window.setTimeout(() => {
+      document.getElementById("resident-management-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  };
+
+  const startAddingResidentContact = (resident: typeof residents[number]) => {
+    setResidentForm({
+      id: undefined,
+      companyId: String(resident.companyId),
+      projectId: String(resident.projectId),
+      unitNumber: resident.unitNumber,
+      phoneNumber: "",
+      name: "",
+    });
+    setResidentFormMode("add-contact");
+    window.setTimeout(() => {
+      document.getElementById("resident-management-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  };
+
+  const cancelResidentForm = () => {
+    setResidentForm(createEmptyResidentForm());
+    setResidentFormMode("new");
   };
 
   const startEditingSlot = (slot: typeof slots[number]) => {
@@ -945,15 +987,15 @@ export default function AdminPage() {
               </TabsContent>
 
               <TabsContent value="residents" className="space-y-6">
-                <Card>
-                  <CardHeader><CardTitle>住戶資料管理</CardTitle><CardDescription>你現在要求逐筆新增。這樣做的風險是戶數一多時建立成本很高，之後最好補 CSV 匯入；另外同一戶別如有兩位以上聯絡人，請分成多筆資料新增，各自填入手機。</CardDescription></CardHeader>
+                <Card id="resident-management-card">
+                  <CardHeader><CardTitle>{residentFormMode === "edit" ? "編輯住戶聯絡資料" : residentFormMode === "add-contact" ? "新增該戶資料" : "住戶資料管理"}</CardTitle><CardDescription>同一建案、同一戶號可有多筆聯絡資料。預約與統計均以戶號計算；任一筆有填手機的資料都可用於住戶驗證。手機與姓名至少需填寫一項。</CardDescription></CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={residentForm.companyId} onChange={event => setResidentForm(current => ({ ...current, companyId: event.target.value, projectId: "" }))}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
-                    <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={residentForm.projectId} onChange={event => setResidentForm(current => ({ ...current, projectId: event.target.value }))} disabled={!residentForm.companyId}><option value="">{residentForm.companyId ? "請選擇" : "請先選公司"}</option>{residentProjectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
-                    <div className="space-y-2"><Label>標準戶號</Label><Input value={residentForm.unitNumber} onChange={event => setResidentForm(current => ({ ...current, unitNumber: event.target.value }))} /></div>
+                    <div className="space-y-2"><Label>公司</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={residentForm.companyId} onChange={event => setResidentForm(current => ({ ...current, companyId: event.target.value, projectId: "" }))} disabled={residentFormMode !== "new"}><option value="">請選擇</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div>
+                    <div className="space-y-2"><Label>建案</Label><select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={residentForm.projectId} onChange={event => setResidentForm(current => ({ ...current, projectId: event.target.value }))} disabled={!residentForm.companyId || residentFormMode !== "new"}><option value="">{residentForm.companyId ? "請選擇" : "請先選公司"}</option>{residentProjectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
+                    <div className="space-y-2"><Label>標準戶號</Label><Input value={residentForm.unitNumber} onChange={event => setResidentForm(current => ({ ...current, unitNumber: event.target.value }))} disabled={residentFormMode !== "new"} /></div>
                     <div className="space-y-2"><Label>手機號碼</Label><Input value={residentForm.phoneNumber} onChange={event => setResidentForm(current => ({ ...current, phoneNumber: event.target.value }))} /></div>
-                    <div className="space-y-2 md:col-span-2"><Label>備註</Label><Textarea value={residentForm.note} onChange={event => setResidentForm(current => ({ ...current, note: event.target.value }))} /></div>
-                    <div className="md:col-span-2 space-y-2"><Button onClick={saveResident} disabled={residentMutation.isPending}>{residentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}儲存住戶資料</Button><p className="text-sm text-muted-foreground">請先選擇公司，再選該公司底下的建案，最後輸入戶號與手機後儲存。若同一戶別有多位聯絡人，請用相同戶號分別建立多筆手機資料。</p></div>
+                    <div className="space-y-2"><Label>姓名</Label><Input value={residentForm.name} onChange={event => setResidentForm(current => ({ ...current, name: event.target.value }))} /></div>
+                    <div className="md:col-span-2 space-y-2"><div className="flex flex-wrap gap-3"><Button onClick={saveResident} disabled={residentMutation.isPending}>{residentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{residentFormMode === "edit" ? "更新聯絡資料" : residentFormMode === "add-contact" ? "儲存新增資料" : "儲存住戶資料"}</Button>{residentFormMode !== "new" ? <Button variant="outline" onClick={cancelResidentForm} disabled={residentMutation.isPending}>取消</Button> : null}</div><p className="text-sm text-muted-foreground">若同一戶別有多位聯絡人，請從該戶其中一筆資料的「編輯」進入，再點選「新增該戶資料」。沒有手機的資料會保留姓名，但不可用於住戶驗證。</p></div>
                   </CardContent>
                 </Card>
 
@@ -975,8 +1017,8 @@ export default function AdminPage() {
                     </div>
                     <div className="overflow-x-auto">
                       <Table>
-                        <TableHeader><TableRow><TableHead>建案</TableHead><TableHead>戶號</TableHead><TableHead>手機</TableHead><TableHead>備註</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
-                        <TableBody>{filteredResidents.length ? filteredResidents.map(resident => <TableRow key={resident.id}><TableCell>{projectNameById.get(resident.projectId) || `建案 ${resident.projectId}`}</TableCell><TableCell>{resident.unitNumber}</TableCell><TableCell>{resident.phoneNumber}</TableCell><TableCell>{resident.note || "-"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "resident", id: resident.id, label: resident.unitNumber, step: 1 })}>刪除</Button></TableCell></TableRow>) : <TableRow><TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">目前篩選條件下沒有住戶資料。</TableCell></TableRow>}</TableBody>
+                        <TableHeader><TableRow><TableHead>建案</TableHead><TableHead>戶號</TableHead><TableHead>手機</TableHead><TableHead>姓名</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
+                        <TableBody>{filteredResidents.length ? filteredResidents.map(resident => <TableRow key={resident.id}><TableCell>{projectNameById.get(resident.projectId) || `建案 ${resident.projectId}`}</TableCell><TableCell>{resident.unitNumber}</TableCell><TableCell>{resident.phoneNumber || "-"}</TableCell><TableCell>{resident.name || "-"}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingResident(resident)}>編輯</Button><Button variant="outline" size="sm" onClick={() => startAddingResidentContact(resident)}>新增該戶資料</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "resident", id: resident.id, label: `${resident.unitNumber}${resident.name ? `／${resident.name}` : ""}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>) : <TableRow><TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">目前篩選條件下沒有住戶資料。</TableCell></TableRow>}</TableBody>
                       </Table>
                     </div>
                   </CardContent>
@@ -1134,7 +1176,7 @@ export default function AdminPage() {
                                 <TableHead>建案</TableHead>
                                 <TableHead>戶號</TableHead>
                                 <TableHead>手機</TableHead>
-                                <TableHead>備註</TableHead>
+                                <TableHead>姓名</TableHead>
                                 <TableHead className="text-right">操作</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -1144,8 +1186,8 @@ export default function AdminPage() {
                                   <TableRow>
                                     <TableCell>{projectNameById.get(resident.projectId) || `建案 ${resident.projectId}`}</TableCell>
                                     <TableCell>{resident.unitNumber}</TableCell>
-                                    <TableCell>{resident.phoneNumber}</TableCell>
-                                    <TableCell>{resident.note || "-"}</TableCell>
+                                    <TableCell>{resident.phoneNumber || "-"}</TableCell>
+                                    <TableCell>{resident.name || "-"}</TableCell>
                                     <TableCell className="text-right">
                                       <Button variant="outline" size="sm" onClick={() => startAssistedBooking(resident)}>
                                         {assistedBookingForm.residentId === String(resident.id) ? "代客預約中" : "代客預約"}

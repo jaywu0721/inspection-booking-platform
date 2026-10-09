@@ -227,13 +227,16 @@ export const appRouter = router({
           companyId: z.number().int().positive(),
           projectId: z.number().int().positive(),
           unitNumber: z.string().min(1),
-          phoneNumber: z.string().min(1),
-          note: z.string().optional().or(z.literal("")),
+          phoneNumber: z.string(),
+          name: z.string(),
+        }).refine(input => Boolean(input.phoneNumber.trim() || input.name.trim()), {
+          message: "手機號碼與姓名至少需填寫一項",
+          path: ["phoneNumber"],
         })
       )
       .mutation(async ({ ctx, input }) => {
         requireAdmin(ctx.req.headers);
-        const id = await upsertResidentRecord({ ...input, note: input.note || null });
+        const id = await upsertResidentRecord(input);
         return { success: true, id } as const;
       }),
     deleteCompany: publicProcedure

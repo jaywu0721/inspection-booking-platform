@@ -28,14 +28,14 @@ describe("admin resident form helpers", () => {
   it("blocks resident submission when company or project is missing", () => {
     expect(
       validateResidentForm(
-        { companyId: "", projectId: "", unitNumber: "A-4-A", phoneNumber: "0912345678", note: "" },
+        { companyId: "", projectId: "", unitNumber: "A-4-A", phoneNumber: "0912345678", name: "王小明" },
         projects
       )
     ).toBe("請先選擇公司，再儲存住戶資料");
 
     expect(
       validateResidentForm(
-        { companyId: "1", projectId: "", unitNumber: "A-4-A", phoneNumber: "0912345678", note: "" },
+        { companyId: "1", projectId: "", unitNumber: "A-4-A", phoneNumber: "0912345678", name: "王小明" },
         projects
       )
     ).toBe("請先選擇建案，再儲存住戶資料");
@@ -44,18 +44,30 @@ describe("admin resident form helpers", () => {
   it("blocks cross-company project selection", () => {
     expect(
       validateResidentForm(
-        { companyId: "1", projectId: "21", unitNumber: "A-4-A", phoneNumber: "0912345678", note: "" },
+        { companyId: "1", projectId: "21", unitNumber: "A-4-A", phoneNumber: "0912345678", name: "王小明" },
         projects
       )
     ).toBe("所選建案不屬於目前公司，請重新選擇");
   });
 
-  it("accepts a valid resident draft", () => {
+  it("accepts a phone-only or name-only resident contact, but blocks a fully blank contact", () => {
     expect(
       validateResidentForm(
-        { companyId: "1", projectId: "11", unitNumber: "A-4-A", phoneNumber: "0912345678", note: "備註" },
+        { companyId: "1", projectId: "11", unitNumber: "A-4-A", phoneNumber: "0912345678", name: "" },
         projects
       )
     ).toBeNull();
+    expect(
+      validateResidentForm(
+        { companyId: "1", projectId: "11", unitNumber: "A-4-A", phoneNumber: "", name: "王小明" },
+        projects
+      )
+    ).toBeNull();
+    expect(
+      validateResidentForm(
+        { companyId: "1", projectId: "11", unitNumber: "A-4-A", phoneNumber: "", name: "" },
+        projects
+      )
+    ).toBe("手機號碼與姓名至少需填寫一項");
   });
 });

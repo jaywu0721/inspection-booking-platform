@@ -153,12 +153,13 @@ export const residents = mysqlTable(
     projectId: int("projectId").notNull(),
     unitNumber: varchar("unitNumber", { length: 120 }).notNull(),
     phoneNumber: varchar("phoneNumber", { length: 30 }).notNull(),
+    name: varchar("name", { length: 255 }).default("").notNull(),
     note: text("note"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    residentUnique: uniqueIndex("residents_project_unit_phone_unique").on(table.projectId, table.unitNumber, table.phoneNumber),
+    residentContactUnique: uniqueIndex("residents_project_unit_phone_name_unique").on(table.projectId, table.unitNumber, table.phoneNumber, table.name),
   })
 );
 

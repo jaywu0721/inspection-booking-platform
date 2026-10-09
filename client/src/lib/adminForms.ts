@@ -5,11 +5,12 @@ export type ProjectOptionSource = {
 };
 
 export type ResidentFormDraft = {
+  id?: number;
   companyId: string;
   projectId: string;
   unitNumber: string;
   phoneNumber: string;
-  note: string;
+  name: string;
 };
 
 export function parsePositiveId(value: string) {
@@ -46,8 +47,8 @@ export function validateResidentForm(form: ResidentFormDraft, projects: ProjectO
     return "請先輸入住戶標準戶號";
   }
 
-  if (!form.phoneNumber.trim()) {
-    return "請先輸入住戶手機號碼";
+  if (!form.phoneNumber.trim() && !form.name.trim()) {
+    return "手機號碼與姓名至少需填寫一項";
   }
 
   return null;

@@ -36,6 +36,13 @@
       "when": 1791562190989,
       "tag": "0004_milky_calypso",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1791587628279,
+      "tag": "0005_open_radioactive_man",
+      "breakpoints": true
     }
   ]
 }

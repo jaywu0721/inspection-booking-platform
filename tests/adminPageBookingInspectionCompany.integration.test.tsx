@@ -30,10 +30,10 @@ const { state, searchBookingsUseQuery, bookingAvailabilityUseQuery, createBookin
     ],
     slots: [],
     residents: [
-      { id: 201, projectId: 20, unitNumber: "12F-1", phoneNumber: "0912000001", note: "已預約" },
-      { id: 202, projectId: 20, unitNumber: "12F-2", phoneNumber: "0912000002", note: "另一條連結已預約" },
-      { id: 203, projectId: 20, unitNumber: "12F-3", phoneNumber: "0912000003", note: "已取消後未補約" },
-      { id: 204, projectId: 20, unitNumber: " 12f-2 ", phoneNumber: "0912000004", note: "同戶第二聯絡人" },
+      { id: 201, companyId: 10, projectId: 20, unitNumber: "12F-1", phoneNumber: "0912000001", name: "已預約" },
+      { id: 202, companyId: 10, projectId: 20, unitNumber: "12F-2", phoneNumber: "0912000002", name: "另一條連結已預約" },
+      { id: 203, companyId: 10, projectId: 20, unitNumber: "12F-3", phoneNumber: "0912000003", name: "已取消後未補約" },
+      { id: 204, companyId: 10, projectId: 20, unitNumber: " 12f-2 ", phoneNumber: "0912000004", name: "同戶第二聯絡人" },
     ],
     bookings: [
       { id: 1, projectId: 20, linkId: 30, unitNumberSnapshot: "12F-1", status: "booked" },
@@ -435,7 +435,7 @@ describe("AdminPage booking inspection company integration", () => {
 
     const unbookedTable = screen
       .getAllByRole("table")
-      .find(table => within(table).queryByText("備註") && within(table).queryByText("另一條連結已預約"));
+      .find(table => within(table).queryByText("姓名") && within(table).queryByText("另一條連結已預約"));
 
     expect(unbookedTable).toBeTruthy();
     expect(within(unbookedTable as HTMLElement).getAllByText("12F-2").length).toBe(1);
@@ -453,7 +453,7 @@ describe("AdminPage booking inspection company integration", () => {
 
     const unbookedTable = screen
       .getAllByRole("table")
-      .find(table => within(table).queryByText("備註") && within(table).queryByText("已取消後未補約"));
+      .find(table => within(table).queryByText("姓名") && within(table).queryByText("已取消後未補約"));
 
     expect(unbookedTable).toBeTruthy();
 
@@ -483,7 +483,7 @@ describe("AdminPage booking inspection company integration", () => {
 
     const refreshedUnbookedTable = screen
       .getAllByRole("table")
-      .find(table => within(table).queryByText("備註") && within(table).queryByText("已預約"));
+      .find(table => within(table).queryByText("姓名") && within(table).queryByText("已預約"));
 
     expect(refreshedUnbookedTable).toBeTruthy();
     expect(within(refreshedUnbookedTable as HTMLElement).queryByText("12F-3")).toBeNull();
@@ -501,7 +501,7 @@ describe("AdminPage booking inspection company integration", () => {
 
     const unbookedTable = screen
       .getAllByRole("table")
-      .find(table => within(table).queryByText("備註") && within(table).queryByText("已取消後未補約"));
+      .find(table => within(table).queryByText("姓名") && within(table).queryByText("已取消後未補約"));
     expect(unbookedTable).toBeTruthy();
 
     const residentRow = within(unbookedTable as HTMLElement).getAllByRole("row").find(row => within(row).queryByText("12F-3"));

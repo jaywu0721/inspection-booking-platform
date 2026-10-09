@@ -1248,7 +1248,7 @@ export async function searchStatisticResidents(input: { linkId: number; unitNumb
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
   const residentRows = await db
-    .select({ id: residents.id, unitNumber: residents.unitNumber, phoneNumber: residents.phoneNumber, note: residents.note })
+    .select({ id: residents.id, unitNumber: residents.unitNumber, phoneNumber: residents.phoneNumber, name: residents.name })
     .from(residents)
     .where(and(eq(residents.projectId, site.project.id), input.unitNumber ? like(residents.unitNumber, `%${input.unitNumber}%`) : undefined))
     .orderBy(asc(residents.unitNumber), asc(residents.id));
@@ -1370,16 +1370,63 @@ export async function upsertProjectRecord(input: Omit<InsertProject, "createdAt"
   return Number(inserted[0].insertId);
 }
 
-export async function upsertResidentRecord(input: Omit<InsertResident, "createdAt" | "updatedAt"> & { id?: number }) {
+export async function upsertResidentRecord(input: {
+  id?: number;
+  companyId: number;
+  projectId: number;
+  unitNumber: string;
+  phoneNumber: string;
+  name: string;
+}) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
+  const phoneNumber = input.phoneNumber.trim();
+  const name = input.name.trim();
+  if (!phoneNumber && !name) {
+    throw new Error("手機號碼與姓名至少需填寫一項");
+  }
+
   if (input.id) {
-    await db.update(residents).set({ ...input, note: input.note ?? null }).where(eq(residents.id, input.id));
+    const [existing] = await db.select().from(residents).where(eq(residents.id, input.id)).limit(1);
+    if (!existing) {
+      throw new Error("找不到住戶資料");
+    }
+    if (existing.companyId !== input.companyId || existing.projectId !== input.projectId || existing.unitNumber !== input.unitNumber.trim()) {
+      throw new Error("個別住戶資料只能修改手機號碼與姓名");
+    }
+
+    const [duplicate] = await db
+      .select({ id: residents.id })
+      .from(residents)
+      .where(and(eq(residents.projectId, existing.projectId), eq(residents.unitNumber, existing.unitNumber), eq(residents.phoneNumber, phoneNumber), eq(residents.name, name)))
+      .limit(1);
+    if (duplicate && duplicate.id !== input.id) {
+      throw new Error("同一戶號已有相同手機與姓名的聯絡資料");
+    }
+
+    await db.update(residents).set({ phoneNumber, name }).where(eq(residents.id, input.id));
     return input.id;
   }
 
-  const inserted = await db.insert(residents).values({ ...input, note: input.note ?? null });
+  const unitNumber = input.unitNumber.trim();
+  const [duplicate] = await db
+    .select({ id: residents.id })
+    .from(residents)
+    .where(and(eq(residents.projectId, input.projectId), eq(residents.unitNumber, unitNumber), eq(residents.phoneNumber, phoneNumber), eq(residents.name, name)))
+    .limit(1);
+  if (duplicate) {
+    throw new Error("同一戶號已有相同手機與姓名的聯絡資料");
+  }
+
+  const inserted = await db.insert(residents).values({
+    companyId: input.companyId,
+    projectId: input.projectId,
+    unitNumber,
+    phoneNumber,
+    name,
+    note: null,
+  });
   return Number(inserted[0].insertId);
 }
 
