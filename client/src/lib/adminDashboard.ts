@@ -14,6 +14,8 @@ export type DashboardCompanySource = {
 export type DashboardResidentSource = {
   projectId: number;
   unitNumber: string;
+  name?: string | null;
+  phoneNumber?: string | null;
 };
 
 export type DashboardBookingSource = {
@@ -29,7 +31,35 @@ export function filterResidentsByProject<T extends DashboardResidentSource>(resi
     return residents;
   }
 
-  return residents.filter(resident => resident.projectId === parsedProjectId);
+  return residents
+    .filter(resident => resident.projectId === parsedProjectId)
+    .sort((left, right) => compareResidentsByFilteredProjectOrder(left, right));
+}
+
+function parseStandardUnitNumber(unitNumber: string) {
+  const match = unitNumber.trim().toUpperCase().match(/^(\d+)([A-Z]+)$/);
+  if (!match) return null;
+  return { number: Number(match[1]), letters: match[2] };
+}
+
+export function compareResidentsByFilteredProjectOrder<T extends DashboardResidentSource>(left: T, right: T) {
+  const leftUnit = parseStandardUnitNumber(left.unitNumber);
+  const rightUnit = parseStandardUnitNumber(right.unitNumber);
+
+  if (leftUnit && rightUnit) {
+    const numberComparison = rightUnit.number - leftUnit.number;
+    if (numberComparison !== 0) return numberComparison;
+
+    const letterComparison = leftUnit.letters.localeCompare(rightUnit.letters, "en");
+    if (letterComparison !== 0) return letterComparison;
+  } else {
+    const unitComparison = left.unitNumber.localeCompare(right.unitNumber, "en");
+    if (unitComparison !== 0) return unitComparison;
+  }
+
+  const nameComparison = (left.name ?? "").localeCompare(right.name ?? "", "zh-Hant");
+  if (nameComparison !== 0) return nameComparison;
+  return (left.phoneNumber ?? "").localeCompare(right.phoneNumber ?? "", "en");
 }
 
 function normalizeUnitNumber(unitNumber: string) {

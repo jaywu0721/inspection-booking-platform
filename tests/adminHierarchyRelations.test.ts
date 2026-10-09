@@ -39,6 +39,26 @@ describe("admin hierarchy relation helpers", () => {
     ]);
   });
 
+  it("sorts filtered resident units by number descending, letters ascending, then name and phone", () => {
+    const residents = [
+      { id: 1, projectId: 11, unitNumber: "7A", name: "Amy", phoneNumber: "0917" },
+      { id: 2, projectId: 11, unitNumber: "9C", name: "Amy", phoneNumber: "0919" },
+      { id: 3, projectId: 11, unitNumber: "9A", name: "Betty", phoneNumber: "0913" },
+      { id: 4, projectId: 11, unitNumber: "9A", name: "Amy", phoneNumber: "0912" },
+      { id: 5, projectId: 11, unitNumber: "9A", name: "Amy", phoneNumber: "0911" },
+      { id: 6, projectId: 21, unitNumber: "99A", name: "Other", phoneNumber: "0999" },
+    ];
+
+    expect(filterResidentsByProject(residents, "11").map(resident => `${resident.unitNumber}/${resident.name}/${resident.phoneNumber}`)).toEqual([
+      "9A/Amy/0911",
+      "9A/Amy/0912",
+      "9A/Betty/0913",
+      "9C/Amy/0919",
+      "7A/Amy/0917",
+    ]);
+    expect(filterResidentsByProject(residents, "")).toBe(residents);
+  });
+
   it("keeps slots under the selected link only", () => {
     const slots = [
       { id: 1000, projectId: 11, linkId: 100, slotDate: new Date("2026-06-01T01:00:00.000Z"), startLabel: "09:00", endLabel: "10:30", capacity: 1, isActive: true },
