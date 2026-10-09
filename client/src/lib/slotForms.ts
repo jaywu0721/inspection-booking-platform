@@ -1,7 +1,8 @@
 type LinkRecord = {
   id: number;
   projectId: number;
-  type?: string;
+  mode?: "inspection" | "statistics";
+  type?: string | null;
   isEnabled?: boolean;
 };
 
@@ -95,7 +96,7 @@ function enumerateDateRange(startDate: string, endDate: string) {
 export function getLinksForProject<T extends LinkRecord>(links: T[], projectId: string) {
   const parsedProjectId = Number(projectId);
   if (!parsedProjectId) return [] as T[];
-  return links.filter(link => link.projectId === parsedProjectId);
+  return links.filter(link => link.projectId === parsedProjectId && link.mode !== "statistics");
 }
 
 export function filterSlotsByLink<T extends SlotRecord>(slots: T[], linkId: string) {

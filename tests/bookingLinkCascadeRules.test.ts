@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { adminCredentials, bookingLinks, bookingReschedules, bookings, bookingSlots, companies, projects } from "../drizzle/schema";
+import { adminCredentials, bookingLinks, bookingReschedules, bookings, bookingSlots, companies, projects, statisticOptions, statisticResponses } from "../drizzle/schema";
 
 const { captured, fakeDb } = vi.hoisted(() => {
   const captured = {
@@ -66,6 +66,9 @@ const { captured, fakeDb } = vi.hoisted(() => {
       where(condition: unknown) {
         if (isSingleIdSelection && fromTable === bookings) {
           return Promise.resolve(captured.bookingRows);
+        }
+        if (fromTable === statisticResponses) {
+          return Promise.resolve([{ used: 0 }]);
         }
         if (fromTable === bookings) {
           captured.searchWhere = condition;
@@ -177,10 +180,11 @@ describe("booking link cascade and filter rules", () => {
   it("deletes reschedules, bookings, slots and the link in order when a booking link is removed", async () => {
     await dbModule.deleteBookingLinkRecord(77);
 
-    expect(captured.deletes).toHaveLength(4);
+    expect(captured.deletes).toHaveLength(5);
     expect(captured.deletes[0]).toMatchObject({ table: bookingReschedules, condition: { type: "inArray", left: bookingReschedules.bookingId, right: [101, 102] } });
     expect(captured.deletes[1]).toMatchObject({ table: bookings, condition: { type: "inArray", left: bookings.id, right: [101, 102] } });
     expect(captured.deletes[2]).toMatchObject({ table: bookingSlots, condition: { type: "eq", left: bookingSlots.linkId, right: 77 } });
-    expect(captured.deletes[3]).toMatchObject({ table: bookingLinks, condition: { type: "eq", left: bookingLinks.id, right: 77 } });
+    expect(captured.deletes[3]).toMatchObject({ table: statisticOptions, condition: { type: "eq", left: statisticOptions.linkId, right: 77 } });
+    expect(captured.deletes[4]).toMatchObject({ table: bookingLinks, condition: { type: "eq", left: bookingLinks.id, right: 77 } });
   });
 });

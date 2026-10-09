@@ -14,6 +14,7 @@ import { trpc } from "@/lib/trpc";
 import { AdminRescheduleFields } from "@/components/AdminRescheduleFields";
 import { AdminAssistedBookingFields } from "@/components/AdminAssistedBookingFields";
 import { AdminBookingRecordsTable } from "@/components/AdminBookingRecordsTable";
+import { AdminStatisticsPanel } from "@/components/AdminStatisticsPanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -134,6 +135,7 @@ export default function AdminPage() {
   const companies = dashboardQuery.data?.companies ?? [];
   const projects = dashboardQuery.data?.projects ?? [];
   const links = dashboardQuery.data?.links ?? [];
+  const inspectionLinks = links.filter(link => link.mode === "inspection");
   const slots = dashboardQuery.data?.slots ?? [];
   const residents = dashboardQuery.data?.residents ?? [];
   const bookings = bookingQuery.data ?? [];
@@ -399,12 +401,12 @@ export default function AdminPage() {
 
   const startEditingLink = (link: typeof links[number]) => {
     setLinkForm({
-      id: link.id,
-      companyId: String(link.companyId),
-      projectId: String(link.projectId),
-      type: link.type,
-      isEnabled: link.isEnabled,
-      startsAt: formatDateTimeInput(link.startsAt),
+    id: link.id,
+    companyId: String(link.companyId),
+    projectId: String(link.projectId),
+    type: link.type ?? "initial",
+    isEnabled: link.isEnabled,
+    startsAt: formatDateTimeInput(link.startsAt),
       endsAt: formatDateTimeInput(link.endsAt),
     });
   };
@@ -850,12 +852,13 @@ export default function AdminPage() {
           </Card>
 
           <div className="lg:col-span-3">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <TabsList className="grid w-full grid-cols-5">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+              <TabsList className="grid w-full grid-cols-6">
                 <TabsTrigger value="companies">公司</TabsTrigger>
                 <TabsTrigger value="projects">建案</TabsTrigger>
                 <TabsTrigger value="residents">住戶</TabsTrigger>
                 <TabsTrigger value="schedule">連結與時段</TabsTrigger>
+                <TabsTrigger value="statistics">統計數量</TabsTrigger>
                 <TabsTrigger value="bookings">預約與改期</TabsTrigger>
               </TabsList>
 
@@ -1066,19 +1069,23 @@ export default function AdminPage() {
                       <p className="text-sm font-medium">依預約連結篩選時段</p>
                       <p className="mt-2 text-sm text-muted-foreground">舊共用時段已被後台隱藏；你現在看到的清單應該只跟指定連結有關。若這裡還混到別的連結，方向就錯了。</p>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {links.map(link => (
+                        {inspectionLinks.map(link => (
                           <Button key={link.id} type="button" variant={(selectedSlotLinkId || slotForm.linkId) === String(link.id) ? "default" : "outline"} size="sm" onClick={() => setSelectedSlotLinkId(String(link.id))}>{`${projectNameById.get(link.projectId) || `建案 ${link.projectId}`} / ${link.type} / #${link.id}`}</Button>
                         ))}
                       </div>
                     </div>
                     <div className="overflow-x-auto">
-                      <Table><TableHeader><TableRow><TableHead>建案</TableHead><TableHead>類型</TableHead><TableHead>狀態</TableHead><TableHead>分享網址</TableHead><TableHead>啟用期間</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{links.map(link => { const bookingUrl = bookingLinkUrlById.get(link.id) ?? null; return <TableRow key={link.id}><TableCell>{projectNameById.get(link.projectId) || `建案 ${link.projectId}`}</TableCell><TableCell>{link.type} / #{link.id}</TableCell><TableCell><Badge variant={link.isEnabled ? "outline" : "secondary"}>{link.isEnabled ? "啟用中" : "已停止"}</Badge></TableCell><TableCell className="min-w-[260px]"><div className="space-y-2"><p className="break-all text-xs text-muted-foreground">{bookingUrl || "缺少 share token，暫時無法產生連結"}</p>{bookingUrl ? <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => copyBookingLink(bookingUrl)}><Copy className="h-4 w-4" />複製</Button><Button asChild variant="outline" size="sm"><a href={bookingUrl} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />開啟</a></Button></div> : null}</div></TableCell><TableCell>{formatDateTime(link.startsAt)} ~ {formatDateTime(link.endsAt)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingLink(link)}>編輯</Button><Button variant="outline" size="sm" onClick={() => toggleLinkEnabledMutation.mutate({ id: link.id, isEnabled: !link.isEnabled, disabledReason: link.disabledReason || "此連結已由後台停止" })} disabled={toggleLinkEnabledMutation.isPending}>{link.isEnabled ? "停止" : "重新啟用"}</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "link", id: link.id, label: `${projectNameById.get(link.projectId) || `建案 ${link.projectId}`} / ${link.type} / #${link.id}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>; })}</TableBody></Table>
+                      <Table><TableHeader><TableRow><TableHead>建案</TableHead><TableHead>類型</TableHead><TableHead>狀態</TableHead><TableHead>分享網址</TableHead><TableHead>啟用期間</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{inspectionLinks.map(link => { const bookingUrl = bookingLinkUrlById.get(link.id) ?? null; return <TableRow key={link.id}><TableCell>{projectNameById.get(link.projectId) || `建案 ${link.projectId}`}</TableCell><TableCell>{link.type} / #{link.id}</TableCell><TableCell><Badge variant={link.isEnabled ? "outline" : "secondary"}>{link.isEnabled ? "啟用中" : "已停止"}</Badge></TableCell><TableCell className="min-w-[260px]"><div className="space-y-2"><p className="break-all text-xs text-muted-foreground">{bookingUrl || "缺少 share token，暫時無法產生連結"}</p>{bookingUrl ? <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => copyBookingLink(bookingUrl)}><Copy className="h-4 w-4" />複製</Button><Button asChild variant="outline" size="sm"><a href={bookingUrl} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />開啟</a></Button></div> : null}</div></TableCell><TableCell>{formatDateTime(link.startsAt)} ~ {formatDateTime(link.endsAt)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingLink(link)}>編輯</Button><Button variant="outline" size="sm" onClick={() => toggleLinkEnabledMutation.mutate({ id: link.id, isEnabled: !link.isEnabled, disabledReason: link.disabledReason || "此連結已由後台停止" })} disabled={toggleLinkEnabledMutation.isPending}>{link.isEnabled ? "停止" : "重新啟用"}</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "link", id: link.id, label: `${projectNameById.get(link.projectId) || `建案 ${link.projectId}`} / ${link.type} / #${link.id}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>; })}</TableBody></Table>
                     </div>
                     <div className="overflow-x-auto">
                       <Table><TableHeader><TableRow><TableHead>連結 ID</TableHead><TableHead>日期</TableHead><TableHead>時段</TableHead><TableHead>名額</TableHead><TableHead>狀態</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{filteredSlots.map(slot => <TableRow key={slot.id}><TableCell>{slot.linkId ?? "-"}</TableCell><TableCell>{formatDateOnly(slot.slotDate)}</TableCell><TableCell>{slot.startLabel} - {slot.endLabel}</TableCell><TableCell>{slot.capacity}</TableCell><TableCell>{slot.isActive ? "啟用" : "停用"}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => startEditingSlot(slot)}>編輯</Button><Button variant="outline" size="sm" onClick={() => setDeleteTarget({ type: "slot", id: slot.id, label: `${formatDateOnly(slot.slotDate)} ${slot.startLabel}-${slot.endLabel}`, step: 1 })}>刪除</Button></div></TableCell></TableRow>)}</TableBody></Table>
                     </div>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="statistics" className="space-y-6">
+                <AdminStatisticsPanel companies={companies} projects={projects} links={links} onRefresh={refreshAll} />
               </TabsContent>
 
               <TabsContent value="bookings" className="space-y-6">

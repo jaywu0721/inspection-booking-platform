@@ -80,8 +80,11 @@ export const bookingLinks = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     companyId: int("companyId").notNull(),
     projectId: int("projectId").notNull(),
-    type: mysqlEnum("type", ["initial", "reinspect"]).notNull(),
+    mode: mysqlEnum("mode", ["inspection", "statistics"]).default("inspection").notNull(),
+    type: mysqlEnum("type", ["initial", "reinspect"]),
     shareToken: varchar("shareToken", { length: 64 }).notNull(),
+    statisticsTitle: varchar("statisticsTitle", { length: 255 }),
+    statisticsDescription: text("statisticsDescription"),
     isEnabled: boolean("isEnabled").default(true).notNull(),
     startsAt: timestamp("startsAt").notNull(),
     endsAt: timestamp("endsAt").notNull(),
@@ -93,6 +96,54 @@ export const bookingLinks = mysqlTable(
     shareTokenUnique: uniqueIndex("booking_links_share_token_unique").on(table.shareToken),
   })
 );
+
+export const statisticOptions = mysqlTable(
+  "statisticOptions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    linkId: int("linkId").notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    nameKey: varchar("nameKey", { length: 255 }).notNull(),
+    sortOrder: int("sortOrder").notNull(),
+    isActive: boolean("isActive").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    linkNameKeyUnique: uniqueIndex("statistic_options_link_name_key_unique").on(table.linkId, table.nameKey),
+  })
+);
+
+export const statisticResponses = mysqlTable(
+  "statisticResponses",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    linkId: int("linkId").notNull(),
+    projectId: int("projectId").notNull(),
+    unitNumber: varchar("unitNumber", { length: 120 }).notNull(),
+    optionId: int("optionId").notNull(),
+    lastChangedByType: mysqlEnum("lastChangedByType", ["resident", "admin"]).notNull(),
+    lastChangedByAdminUsername: varchar("lastChangedByAdminUsername", { length: 120 }),
+    createdAtMs: bigint("createdAtMs", { mode: "number" }).notNull(),
+    updatedAtMs: bigint("updatedAtMs", { mode: "number" }).notNull(),
+  },
+  table => ({
+    linkUnitUnique: uniqueIndex("statistic_responses_link_unit_unique").on(table.linkId, table.unitNumber),
+  })
+);
+
+export const statisticResponseHistory = mysqlTable("statisticResponseHistory", {
+  id: int("id").autoincrement().primaryKey(),
+  responseId: int("responseId").notNull(),
+  previousOptionId: int("previousOptionId"),
+  newOptionId: int("newOptionId").notNull(),
+  previousOptionNameSnapshot: varchar("previousOptionNameSnapshot", { length: 255 }),
+  newOptionNameSnapshot: varchar("newOptionNameSnapshot", { length: 255 }).notNull(),
+  changedByType: mysqlEnum("changedByType", ["resident", "admin"]).notNull(),
+  changedByAdminUsername: varchar("changedByAdminUsername", { length: 120 }),
+  reason: text("reason"),
+  changedAtMs: bigint("changedAtMs", { mode: "number" }).notNull(),
+});
 
 export const residents = mysqlTable(
   "residents",
@@ -177,6 +228,12 @@ export type Project = typeof projects.$inferSelect;
 export type InsertProject = typeof projects.$inferInsert;
 export type BookingLink = typeof bookingLinks.$inferSelect;
 export type InsertBookingLink = typeof bookingLinks.$inferInsert;
+export type StatisticOption = typeof statisticOptions.$inferSelect;
+export type InsertStatisticOption = typeof statisticOptions.$inferInsert;
+export type StatisticResponse = typeof statisticResponses.$inferSelect;
+export type InsertStatisticResponse = typeof statisticResponses.$inferInsert;
+export type StatisticResponseHistory = typeof statisticResponseHistory.$inferSelect;
+export type InsertStatisticResponseHistory = typeof statisticResponseHistory.$inferInsert;
 export type Resident = typeof residents.$inferSelect;
 export type InsertResident = typeof residents.$inferInsert;
 export type BookingSlot = typeof bookingSlots.$inferSelect;

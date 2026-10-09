@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, CalendarDays, Building2, Phone, ShieldCheck, CircleAlert } from "lucide-react";
 import { toast } from "sonner";
+import StatisticsHome from "./StatisticsHome";
 
 const formatDate = formatDateInTaipei;
 const formatDateTime = formatDateTimeInTaipei;
@@ -298,6 +299,10 @@ export default function Home() {
         </Card>
       </div>
     );
+  }
+
+  if (site.link.mode === "statistics") {
+    return <StatisticsHome />;
   }
 
   const company = site.company;

@@ -18,6 +18,9 @@ import {
   InsertUser,
   projects,
   residents,
+  statisticOptions,
+  statisticResponseHistory,
+  statisticResponses,
   users,
 } from "../drizzle/schema";
 import { hashPassword, verifyPassword } from "./adminAuth";
@@ -424,6 +427,20 @@ export async function getPublicSiteContext(input: PublicSiteLinkInput) {
   const row = await getActiveLink(input);
   const now = new Date();
   const isExpired = !row.link.isEnabled || row.link.startsAt > now || row.link.endsAt < now;
+
+  if (row.link.mode === "statistics") {
+    return {
+      company: row.company,
+      project: row.project,
+      link: { ...row.link, type: row.link.type ?? "initial" },
+      isExpired,
+      availableSlots: [],
+    };
+  }
+
+  if (!row.link.type) {
+    throw new Error("驗屋預約連結缺少類型設定");
+  }
   const slotUsage = await getSlotUsage(row.project.id);
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
@@ -447,7 +464,7 @@ export async function getPublicSiteContext(input: PublicSiteLinkInput) {
   return {
     company: row.company,
     project: row.project,
-    link: row.link,
+    link: { ...row.link, type: row.link.type },
     isExpired,
     availableSlots,
   };
@@ -473,14 +490,119 @@ async function getAdminLinkContext(linkId: number) {
     throw new Error("找不到對應的預約連結");
   }
 
+  if (row.link.mode === "statistics" || !row.link.type) {
+    throw new Error("這不是驗屋預約連結");
+  }
+
   const now = new Date();
 
   return {
     company: row.company,
     project: row.project,
-    link: row.link,
+    link: { ...row.link, type: row.link.type },
     isExpired: !row.link.isEnabled || row.link.startsAt > now || row.link.endsAt < now,
   };
+}
+
+export function isStatisticsLinkOpen(link: { isEnabled: boolean; startsAt: Date; endsAt: Date }, now = new Date()) {
+  return link.isEnabled && link.startsAt <= now && link.endsAt >= now;
+}
+
+function normalizeStatisticOptionName(value: string) {
+  return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
+export function prepareStatisticOptionNames(optionNames: string[]) {
+  const prepared = optionNames.map(name => ({ name: name.trim(), nameKey: normalizeStatisticOptionName(name) }));
+  if (prepared.length < 2) {
+    throw new Error("統計連結至少需要兩個啟用選項");
+  }
+
+  const seen = new Set<string>();
+  for (const option of prepared) {
+    if (!option.name) {
+      throw new Error("統計選項名稱不可空白");
+    }
+    if (seen.has(option.nameKey)) {
+      throw new Error("同一統計連結不可有重複選項名稱");
+    }
+    seen.add(option.nameKey);
+  }
+
+  return prepared;
+}
+
+async function getStatisticsLinkContext(linkId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const [row] = await db
+    .select({
+      company: companies,
+      project: projects,
+      link: bookingLinks,
+    })
+    .from(bookingLinks)
+    .innerJoin(companies, eq(companies.id, bookingLinks.companyId))
+    .innerJoin(projects, eq(projects.id, bookingLinks.projectId))
+    .where(eq(bookingLinks.id, linkId))
+    .limit(1);
+
+  if (!row || row.link.mode !== "statistics") {
+    throw new Error("這不是統計數量連結");
+  }
+
+  return row;
+}
+
+export async function getPublicStatisticsContext(input: PublicSiteLinkInput) {
+  const row = await getActiveLink(input);
+  if (row.link.mode !== "statistics") {
+    throw new Error("這不是統計數量連結");
+  }
+
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const activeOptions = await db
+    .select({ id: statisticOptions.id, name: statisticOptions.name })
+    .from(statisticOptions)
+    .where(and(eq(statisticOptions.linkId, row.link.id), eq(statisticOptions.isActive, true)))
+    .orderBy(asc(statisticOptions.sortOrder), asc(statisticOptions.id));
+
+  return {
+    company: row.company,
+    project: row.project,
+    link: row.link,
+    activeOptions,
+    isWritable: isStatisticsLinkOpen(row.link),
+  };
+}
+
+async function ensureLinkProjectOwnership(input: { companyId: number; projectId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const [project] = await db.select().from(projects).where(eq(projects.id, input.projectId)).limit(1);
+  if (!project || project.companyId !== input.companyId) {
+    throw new Error("所選建案不屬於目前公司，請重新選擇");
+  }
+
+  return project;
+}
+
+async function lockStatisticResponseForUpdate(
+  tx: { execute?: (query: unknown) => Promise<unknown> },
+  linkId: number,
+  unitNumber: string
+) {
+  if (typeof tx.execute !== "function") return;
+  await tx.execute(sql`SELECT id FROM statisticResponses WHERE linkId = ${linkId} AND unitNumber = ${unitNumber} FOR UPDATE`);
+}
+
+function isDuplicateKeyError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /duplicate|unique/i.test(message);
 }
 
 export async function getAdminBookingAvailability(linkId: number) {
@@ -674,6 +796,9 @@ export async function verifyResidentForBooking(input: PublicSiteLinkInput & {
   phoneNumber: string;
 }) {
   const site = await getPublicSiteContext(input);
+  if (site.link.mode === "statistics") {
+    throw new Error("這不是驗屋預約連結");
+  }
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
@@ -737,6 +862,9 @@ export async function createBookingRecord(input: PublicSiteLinkInput & {
   hasInspectionCompany: boolean;
 }) {
   const site = await getPublicSiteContext(input);
+  if (site.link.mode === "statistics") {
+    throw new Error("這不是驗屋預約連結");
+  }
   return createBookingRecordForSite({
     ...site,
     residentId: input.residentId,
@@ -773,6 +901,408 @@ export async function createAdminBookingRecord(input: {
     duplicateSource: "admin",
     enforceLinkWindow: false,
   });
+}
+
+export async function upsertStatisticsLinkRecord(input: {
+  id?: number;
+  companyId: number;
+  projectId: number;
+  title: string;
+  description?: string | null;
+  isEnabled: boolean;
+  startsAt: Date;
+  endsAt: Date;
+  initialOptionNames?: string[];
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const title = input.title.trim();
+  if (!title) throw new Error("請填寫統計連結名稱");
+  if (input.endsAt.getTime() <= input.startsAt.getTime()) {
+    throw new Error("連結結束時間必須晚於開始時間");
+  }
+
+  await ensureLinkProjectOwnership(input);
+  const description = input.description?.trim() || null;
+
+  if (input.id) {
+    const [existing] = await db.select().from(bookingLinks).where(eq(bookingLinks.id, input.id)).limit(1);
+    if (!existing || existing.mode !== "statistics") {
+      throw new Error("找不到可編輯的統計連結");
+    }
+    if (existing.companyId !== input.companyId || existing.projectId !== input.projectId) {
+      throw new Error("統計連結建立後不可變更所屬公司或建案");
+    }
+
+    await db
+      .update(bookingLinks)
+      .set({
+        statisticsTitle: title,
+        statisticsDescription: description,
+        isEnabled: input.isEnabled,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+        disabledReason: input.isEnabled ? null : "此統計連結已由後台停止",
+      })
+      .where(eq(bookingLinks.id, input.id));
+    return input.id;
+  }
+
+  const preparedOptions = prepareStatisticOptionNames(input.initialOptionNames ?? []);
+  return db.transaction(async tx => {
+    const inserted = await tx.insert(bookingLinks).values({
+      companyId: input.companyId,
+      projectId: input.projectId,
+      mode: "statistics",
+      type: null,
+      shareToken: createShareToken(),
+      statisticsTitle: title,
+      statisticsDescription: description,
+      isEnabled: input.isEnabled,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      disabledReason: input.isEnabled ? null : "此統計連結已由後台停止",
+    });
+    const linkId = Number(inserted[0].insertId);
+    await tx.insert(statisticOptions).values(
+      preparedOptions.map((option, index) => ({
+        linkId,
+        name: option.name,
+        nameKey: option.nameKey,
+        sortOrder: index + 1,
+        isActive: true,
+      }))
+    );
+    return linkId;
+  });
+}
+
+export async function getStatisticOptionsForAdmin(linkId: number) {
+  await getStatisticsLinkContext(linkId);
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+  return db
+    .select()
+    .from(statisticOptions)
+    .where(eq(statisticOptions.linkId, linkId))
+    .orderBy(asc(statisticOptions.sortOrder), asc(statisticOptions.id));
+}
+
+export async function createStatisticOptionRecord(input: { linkId: number; name: string }) {
+  await getStatisticsLinkContext(input.linkId);
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const name = input.name.trim();
+  const nameKey = normalizeStatisticOptionName(name);
+  if (!name) throw new Error("統計選項名稱不可空白");
+  const existing = await db
+    .select({ sortOrder: statisticOptions.sortOrder })
+    .from(statisticOptions)
+    .where(eq(statisticOptions.linkId, input.linkId));
+  const sortOrder = Math.max(0, ...existing.map(option => option.sortOrder)) + 1;
+  const inserted = await db.insert(statisticOptions).values({
+    linkId: input.linkId,
+    name,
+    nameKey,
+    sortOrder,
+    isActive: true,
+  });
+  return Number(inserted[0].insertId);
+}
+
+export async function updateStatisticOptionRecord(input: { id: number; linkId: number; name: string; isActive: boolean }) {
+  await getStatisticsLinkContext(input.linkId);
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+  const name = input.name.trim();
+  const nameKey = normalizeStatisticOptionName(name);
+  if (!name) throw new Error("統計選項名稱不可空白");
+
+  const [option] = await db
+    .select()
+    .from(statisticOptions)
+    .where(and(eq(statisticOptions.id, input.id), eq(statisticOptions.linkId, input.linkId)))
+    .limit(1);
+  if (!option) throw new Error("找不到統計選項");
+
+  await db.update(statisticOptions).set({ name, nameKey, isActive: input.isActive }).where(eq(statisticOptions.id, input.id));
+  return input.id;
+}
+
+export async function deleteStatisticOptionRecord(input: { id: number; linkId: number }) {
+  await getStatisticsLinkContext(input.linkId);
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const [option] = await db
+    .select()
+    .from(statisticOptions)
+    .where(and(eq(statisticOptions.id, input.id), eq(statisticOptions.linkId, input.linkId)))
+    .limit(1);
+  if (!option) throw new Error("找不到統計選項");
+
+  const [responseUsage] = await db
+    .select({ used: count(statisticResponses.id) })
+    .from(statisticResponses)
+    .where(eq(statisticResponses.optionId, input.id));
+  const [historyUsage] = await db
+    .select({ used: count(statisticResponseHistory.id) })
+    .from(statisticResponseHistory)
+    .where(sql`${statisticResponseHistory.previousOptionId} = ${input.id} OR ${statisticResponseHistory.newOptionId} = ${input.id}`);
+
+  if (Number(responseUsage?.used ?? 0) > 0 || Number(historyUsage?.used ?? 0) > 0) {
+    throw new Error("此選項已有統計答案或歷程引用，不能刪除");
+  }
+
+  await db.delete(statisticOptions).where(eq(statisticOptions.id, input.id));
+  return input.id;
+}
+
+export async function reorderStatisticOptions(input: { linkId: number; optionIds: number[] }) {
+  await getStatisticsLinkContext(input.linkId);
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+  const options = await db.select({ id: statisticOptions.id }).from(statisticOptions).where(eq(statisticOptions.linkId, input.linkId));
+  const expectedIds = options.map(option => option.id).sort((left, right) => left - right);
+  const receivedIds = [...input.optionIds].sort((left, right) => left - right);
+  if (expectedIds.length !== receivedIds.length || expectedIds.some((id, index) => id !== receivedIds[index])) {
+    throw new Error("統計選項排序資料不完整或不屬於目前連結");
+  }
+
+  await db.transaction(async tx => {
+    for (let index = 0; index < input.optionIds.length; index += 1) {
+      const optionId = input.optionIds[index];
+      await tx.update(statisticOptions).set({ sortOrder: index + 1 }).where(eq(statisticOptions.id, optionId));
+    }
+  });
+  return input.optionIds;
+}
+
+async function resolveStatisticsResident(input: { linkId: number; residentId: number }) {
+  const site = await getStatisticsLinkContext(input.linkId);
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+  const [resident] = await db.select().from(residents).where(eq(residents.id, input.residentId)).limit(1);
+  if (!resident || resident.projectId !== site.project.id || resident.companyId !== site.company.id) {
+    throw new Error("此住戶不屬於目前建案，不能使用這個統計連結");
+  }
+  return { site, resident };
+}
+
+export async function verifyResidentForStatistics(input: PublicSiteLinkInput & { unitNumber: string; phoneNumber: string }) {
+  const site = await getPublicStatisticsContext(input);
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const [resident] = await db
+    .select()
+    .from(residents)
+    .where(
+      and(
+        eq(residents.projectId, site.project.id),
+        eq(residents.unitNumber, input.unitNumber.trim()),
+        eq(residents.phoneNumber, input.phoneNumber.trim())
+      )
+    )
+    .limit(1);
+  if (!resident) {
+    throw new Error("查無對應住戶資料，請確認戶號格式與手機號碼後再試，或直接聯絡窗口。 ");
+  }
+
+  const [response] = await db
+    .select({
+      id: statisticResponses.id,
+      optionId: statisticResponses.optionId,
+      optionName: statisticOptions.name,
+      optionIsActive: statisticOptions.isActive,
+      updatedAtMs: statisticResponses.updatedAtMs,
+    })
+    .from(statisticResponses)
+    .innerJoin(statisticOptions, eq(statisticOptions.id, statisticResponses.optionId))
+    .where(and(eq(statisticResponses.linkId, site.link.id), eq(statisticResponses.unitNumber, resident.unitNumber)))
+    .limit(1);
+
+  return { resident, site, response: response ?? null };
+}
+
+async function writeStatisticResponse(input: {
+  linkId: number;
+  residentId: number;
+  optionId: number;
+  changedByType: "resident" | "admin";
+  changedByAdminUsername?: string;
+  reason?: string;
+  enforcePublicWindow: boolean;
+  attempt?: number;
+}) {
+  const { site, resident } = await resolveStatisticsResident(input);
+  if (input.enforcePublicWindow && !isStatisticsLinkOpen(site.link)) {
+    throw new Error("此統計連結目前未開放填答");
+  }
+
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  try {
+    return await db.transaction(async tx => {
+      await lockStatisticResponseForUpdate(tx as { execute?: (query: unknown) => Promise<unknown> }, site.link.id, resident.unitNumber);
+      const [option] = await tx
+        .select()
+        .from(statisticOptions)
+        .where(and(eq(statisticOptions.id, input.optionId), eq(statisticOptions.linkId, site.link.id), eq(statisticOptions.isActive, true)))
+        .limit(1);
+      if (!option) throw new Error("選擇的統計選項不存在或已停用");
+
+      const [existing] = await tx
+        .select()
+        .from(statisticResponses)
+        .where(and(eq(statisticResponses.linkId, site.link.id), eq(statisticResponses.unitNumber, resident.unitNumber)))
+        .limit(1);
+
+      if (existing?.optionId === option.id) {
+        return { responseId: existing.id, changed: false as const, optionName: option.name };
+      }
+
+      const changedAtMs = nowMs();
+      let responseId: number;
+      let previousOption: { id: number; name: string } | null = null;
+      if (existing) {
+        const [previous] = await tx
+          .select({ id: statisticOptions.id, name: statisticOptions.name })
+          .from(statisticOptions)
+          .where(eq(statisticOptions.id, existing.optionId))
+          .limit(1);
+        previousOption = previous ?? null;
+        await tx
+          .update(statisticResponses)
+          .set({
+            optionId: option.id,
+            lastChangedByType: input.changedByType,
+            lastChangedByAdminUsername: input.changedByAdminUsername ?? null,
+            updatedAtMs: changedAtMs,
+          })
+          .where(eq(statisticResponses.id, existing.id));
+        responseId = existing.id;
+      } else {
+        const inserted = await tx.insert(statisticResponses).values({
+          linkId: site.link.id,
+          projectId: site.project.id,
+          unitNumber: resident.unitNumber,
+          optionId: option.id,
+          lastChangedByType: input.changedByType,
+          lastChangedByAdminUsername: input.changedByAdminUsername ?? null,
+          createdAtMs: changedAtMs,
+          updatedAtMs: changedAtMs,
+        });
+        responseId = Number(inserted[0].insertId);
+      }
+
+      await tx.insert(statisticResponseHistory).values({
+        responseId,
+        previousOptionId: previousOption?.id ?? null,
+        newOptionId: option.id,
+        previousOptionNameSnapshot: previousOption?.name ?? null,
+        newOptionNameSnapshot: option.name,
+        changedByType: input.changedByType,
+        changedByAdminUsername: input.changedByAdminUsername ?? null,
+        reason: input.changedByType === "admin" ? input.reason?.trim() || null : null,
+        changedAtMs,
+      });
+      return { responseId, changed: true as const, optionName: option.name };
+    });
+  } catch (error) {
+    if (input.attempt !== 1 && isDuplicateKeyError(error)) {
+      return writeStatisticResponse({ ...input, attempt: 1 });
+    }
+    throw error;
+  }
+}
+
+export async function submitPublicStatisticResponse(input: PublicSiteLinkInput & { residentId: number; optionId: number }) {
+  const site = await getPublicStatisticsContext(input);
+  return writeStatisticResponse({
+    linkId: site.link.id,
+    residentId: input.residentId,
+    optionId: input.optionId,
+    changedByType: "resident",
+    enforcePublicWindow: true,
+  });
+}
+
+export async function submitAdminStatisticResponse(input: { linkId: number; residentId: number; optionId: number; reason?: string; changedByAdminUsername: string }) {
+  return writeStatisticResponse({
+    linkId: input.linkId,
+    residentId: input.residentId,
+    optionId: input.optionId,
+    changedByType: "admin",
+    changedByAdminUsername: input.changedByAdminUsername,
+    reason: input.reason,
+    enforcePublicWindow: false,
+  });
+}
+
+export async function searchStatisticResidents(input: { linkId: number; unitNumber?: string }) {
+  const site = await getStatisticsLinkContext(input.linkId);
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+  const residentRows = await db
+    .select({ id: residents.id, unitNumber: residents.unitNumber, phoneNumber: residents.phoneNumber, note: residents.note })
+    .from(residents)
+    .where(and(eq(residents.projectId, site.project.id), input.unitNumber ? like(residents.unitNumber, `%${input.unitNumber}%`) : undefined))
+    .orderBy(asc(residents.unitNumber), asc(residents.id));
+  const firstResidentByUnit = new Map<string, (typeof residentRows)[number]>();
+  for (const resident of residentRows) {
+    if (!firstResidentByUnit.has(resident.unitNumber)) firstResidentByUnit.set(resident.unitNumber, resident);
+  }
+  return Array.from(firstResidentByUnit.values());
+}
+
+export async function getStatisticResults(linkId: number) {
+  const site = await getStatisticsLinkContext(linkId);
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+
+  const [options, responseRows] = await Promise.all([
+    db.select().from(statisticOptions).where(eq(statisticOptions.linkId, site.link.id)).orderBy(asc(statisticOptions.sortOrder), asc(statisticOptions.id)),
+    db
+      .select({
+        responseId: statisticResponses.id,
+        optionId: statisticOptions.id,
+        optionName: statisticOptions.name,
+        optionIsActive: statisticOptions.isActive,
+        unitNumber: statisticResponses.unitNumber,
+        updatedAtMs: statisticResponses.updatedAtMs,
+        lastChangedByType: statisticResponses.lastChangedByType,
+      })
+      .from(statisticResponses)
+      .innerJoin(statisticOptions, eq(statisticOptions.id, statisticResponses.optionId))
+      .where(eq(statisticResponses.linkId, site.link.id))
+      .orderBy(asc(statisticOptions.sortOrder), asc(statisticResponses.unitNumber)),
+  ]);
+
+  const responsesByOptionId = new Map<number, typeof responseRows>();
+  for (const response of responseRows) {
+    const current = responsesByOptionId.get(response.optionId) ?? [];
+    current.push(response);
+    responsesByOptionId.set(response.optionId, current);
+  }
+  return {
+    link: site.link,
+    options: options.map(option => {
+      const responses = responsesByOptionId.get(option.id) ?? [];
+      return {
+        ...option,
+        count: responses.length,
+        units: responses.map(response => ({
+          unitNumber: response.unitNumber,
+          updatedAtMs: response.updatedAtMs,
+          lastChangedByType: response.lastChangedByType,
+        })),
+      };
+    }),
+  };
 }
 
 export async function getAdminDashboardData() {
@@ -858,17 +1388,39 @@ async function deleteReschedulesByBookingIds(tx: { delete: (table: typeof bookin
   await tx.delete(bookingReschedules).where(inArray(bookingReschedules.bookingId, bookingIds));
 }
 
+async function assertNoStatisticsResponsesForProject(projectId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("資料庫尚未連線");
+  const [usage] = await db
+    .select({ used: count(statisticResponses.id) })
+    .from(statisticResponses)
+    .where(eq(statisticResponses.projectId, projectId));
+  if (Number(usage?.used ?? 0) > 0) {
+    throw new Error("此建案已有統計回覆，為了保留統計結果，不能直接刪除");
+  }
+}
+
 export async function deleteCompanyRecord(companyId: number) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
+  const companyProjects = await db.select({ id: projects.id }).from(projects).where(eq(projects.companyId, companyId));
+  for (const project of companyProjects) {
+    await assertNoStatisticsResponsesForProject(project.id);
+  }
+
   await db.transaction(async tx => {
     const companyBookingRows = await tx.select({ id: bookings.id }).from(bookings).where(eq(bookings.companyId, companyId));
     const companyBookingIds = companyBookingRows.map(row => row.id);
+    const companyLinkRows = await tx.select({ id: bookingLinks.id }).from(bookingLinks).where(eq(bookingLinks.companyId, companyId));
+    const companyLinkIds = companyLinkRows.map(row => row.id);
 
     await deleteReschedulesByBookingIds(tx, companyBookingIds);
     await tx.delete(bookings).where(eq(bookings.companyId, companyId));
     await tx.delete(bookingSlots).where(eq(bookingSlots.companyId, companyId));
+    if (companyLinkIds.length > 0) {
+      await tx.delete(statisticOptions).where(inArray(statisticOptions.linkId, companyLinkIds));
+    }
     await tx.delete(bookingLinks).where(eq(bookingLinks.companyId, companyId));
     await tx.delete(residents).where(eq(residents.companyId, companyId));
     await tx.delete(projects).where(eq(projects.companyId, companyId));
@@ -882,13 +1434,20 @@ export async function deleteProjectRecord(projectId: number) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
+  await assertNoStatisticsResponsesForProject(projectId);
+
   await db.transaction(async tx => {
     const projectBookingRows = await tx.select({ id: bookings.id }).from(bookings).where(eq(bookings.projectId, projectId));
     const projectBookingIds = projectBookingRows.map(row => row.id);
+    const projectLinkRows = await tx.select({ id: bookingLinks.id }).from(bookingLinks).where(eq(bookingLinks.projectId, projectId));
+    const projectLinkIds = projectLinkRows.map(row => row.id);
 
     await deleteReschedulesByBookingIds(tx, projectBookingIds);
     await tx.delete(bookings).where(eq(bookings.projectId, projectId));
     await tx.delete(bookingSlots).where(eq(bookingSlots.projectId, projectId));
+    if (projectLinkIds.length > 0) {
+      await tx.delete(statisticOptions).where(inArray(statisticOptions.linkId, projectLinkIds));
+    }
     await tx.delete(bookingLinks).where(eq(bookingLinks.projectId, projectId));
     await tx.delete(residents).where(eq(residents.projectId, projectId));
     await tx.delete(projects).where(eq(projects.id, projectId));
@@ -906,6 +1465,25 @@ export async function deleteResidentRecord(residentId: number) {
     throw new Error("此住戶已存在預約紀錄，為了保留歷程，不能直接刪除");
   }
 
+  const [resident] = await db.select().from(residents).where(eq(residents.id, residentId)).limit(1);
+  if (!resident) {
+    throw new Error("找不到住戶資料");
+  }
+
+  const [responseUsage] = await db
+    .select({ used: count(statisticResponses.id) })
+    .from(statisticResponses)
+    .where(and(eq(statisticResponses.projectId, resident.projectId), eq(statisticResponses.unitNumber, resident.unitNumber)));
+  if (Number(responseUsage?.used ?? 0) > 0) {
+    const [sameUnitResidents] = await db
+      .select({ used: count(residents.id) })
+      .from(residents)
+      .where(and(eq(residents.projectId, resident.projectId), eq(residents.unitNumber, resident.unitNumber)));
+    if (Number(sameUnitResidents?.used ?? 0) <= 1) {
+      throw new Error("此戶已有統計答案，為了保留驗證與統計歷程，不能刪除最後一筆住戶資料");
+    }
+  }
+
   await db.delete(residents).where(eq(residents.id, residentId));
   return residentId;
 }
@@ -913,6 +1491,14 @@ export async function deleteResidentRecord(residentId: number) {
 export async function deleteBookingLinkRecord(linkId: number) {
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
+
+  const [statisticsUsage] = await db
+    .select({ used: count(statisticResponses.id) })
+    .from(statisticResponses)
+    .where(eq(statisticResponses.linkId, linkId));
+  if (Number(statisticsUsage?.used ?? 0) > 0) {
+    throw new Error("此統計連結已有回覆或歷程，不能刪除；請改用停止連結保留資料");
+  }
 
   await db.transaction(async tx => {
     const bookingRows = await tx
@@ -928,6 +1514,7 @@ export async function deleteBookingLinkRecord(linkId: number) {
     }
 
     await tx.delete(bookingSlots).where(eq(bookingSlots.linkId, linkId));
+    await tx.delete(statisticOptions).where(eq(statisticOptions.linkId, linkId));
     await tx.delete(bookingLinks).where(eq(bookingLinks.id, linkId));
   });
 
@@ -966,10 +1553,22 @@ export async function upsertBookingLinkRecord(input: Omit<InsertBookingLink, "cr
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 
+  if (!input.type) {
+    throw new Error("請選擇初驗或複驗類型");
+  }
+
   if (input.id) {
+    const [existing] = await db.select().from(bookingLinks).where(eq(bookingLinks.id, input.id)).limit(1);
+    if (!existing || existing.mode !== "inspection") {
+      throw new Error("找不到可編輯的驗屋預約連結");
+    }
     const updateValues = {
       ...input,
+      mode: "inspection" as const,
+      type: input.type,
       shareToken: input.shareToken ?? undefined,
+      statisticsTitle: null,
+      statisticsDescription: null,
       disabledReason: input.isEnabled ? null : input.disabledReason ?? null,
     };
     await db.update(bookingLinks).set(updateValues).where(eq(bookingLinks.id, input.id));
@@ -978,7 +1577,11 @@ export async function upsertBookingLinkRecord(input: Omit<InsertBookingLink, "cr
 
   const inserted = await db.insert(bookingLinks).values({
     ...input,
+    mode: "inspection",
+    type: input.type,
     shareToken: input.shareToken ?? createShareToken(),
+    statisticsTitle: null,
+    statisticsDescription: null,
     disabledReason: input.isEnabled ? null : input.disabledReason ?? null,
   });
   return Number(inserted[0].insertId);
@@ -1318,6 +1921,9 @@ export async function publicRescheduleBookingRecord(input: PublicSiteLinkInput &
   hasInspectionCompany?: boolean;
 }) {
   const site = await getPublicSiteContext(input);
+  if (site.link.mode === "statistics") {
+    throw new Error("這不是驗屋預約連結");
+  }
   const db = await getDb();
   if (!db) throw new Error("資料庫尚未連線");
 

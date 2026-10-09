@@ -12,26 +12,38 @@ import {
 import {
   createAdminBookingRecord,
   createBookingRecord,
+  createStatisticOptionRecord,
   deleteBookingLinkRecord,
   deleteBookingSlotRecord,
   deleteCompanyRecord,
   deleteProjectRecord,
   deleteResidentRecord,
+  deleteStatisticOptionRecord,
   getAdminBookingAvailability,
   getAdminDashboardData,
   getAdminProfile,
   getAdminRescheduleAvailability,
+  getPublicStatisticsContext,
+  getStatisticOptionsForAdmin,
+  getStatisticResults,
   getPublicSiteContext,
   publicRescheduleBookingRecord,
+  reorderStatisticOptions,
   rescheduleBookingRecord,
   searchBookings,
+  searchStatisticResidents,
   setBookingLinkEnabledRecord,
+  submitAdminStatisticResponse,
+  submitPublicStatisticResponse,
+  updateStatisticOptionRecord,
   upsertBookingLinkRecord,
   upsertBookingSlotRecord,
   upsertCompanyRecord,
   upsertProjectRecord,
   upsertResidentRecord,
+  upsertStatisticsLinkRecord,
   validateAdminLogin,
+  verifyResidentForStatistics,
   verifyResidentForBooking,
 } from "./db";
 
@@ -103,6 +115,26 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         const bookingId = await publicRescheduleBookingRecord(input);
         return { success: true, bookingId } as const;
+      }),
+    getStatisticsContext: publicProcedure.input(publicSiteLocatorSchema).query(({ input }) => getPublicStatisticsContext(input)),
+    verifyStatisticsResident: publicProcedure
+      .input(
+        publicSiteLocatorSchema.safeExtend({
+          unitNumber: z.string().min(1),
+          phoneNumber: z.string().min(1),
+        })
+      )
+      .mutation(({ input }) => verifyResidentForStatistics(input)),
+    submitStatisticsResponse: publicProcedure
+      .input(
+        publicSiteLocatorSchema.safeExtend({
+          residentId: z.number().int().positive(),
+          optionId: z.number().int().positive(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const result = await submitPublicStatisticResponse(input);
+        return { success: true, ...result } as const;
       }),
   }),
   adminAuth: router({
@@ -266,6 +298,92 @@ export const appRouter = router({
         requireAdmin(ctx.req.headers);
         const id = await upsertBookingLinkRecord({ ...input, disabledReason: input.disabledReason || null });
         return { success: true, id } as const;
+      }),
+    saveStatisticsLink: publicProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive().optional(),
+          companyId: z.number().int().positive(),
+          projectId: z.number().int().positive(),
+          title: z.string().min(1),
+          description: z.string().optional().or(z.literal("")),
+          isEnabled: z.boolean(),
+          startsAt: z.coerce.date(),
+          endsAt: z.coerce.date(),
+          initialOptionNames: z.array(z.string()).min(2).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        const id = await upsertStatisticsLinkRecord({
+          ...input,
+          description: input.description || null,
+        });
+        return { success: true, id } as const;
+      }),
+    getStatisticOptions: publicProcedure
+      .input(z.object({ linkId: z.number().int().positive() }))
+      .query(({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        return getStatisticOptionsForAdmin(input.linkId);
+      }),
+    createStatisticOption: publicProcedure
+      .input(z.object({ linkId: z.number().int().positive(), name: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        const id = await createStatisticOptionRecord(input);
+        return { success: true, id } as const;
+      }),
+    updateStatisticOption: publicProcedure
+      .input(z.object({ id: z.number().int().positive(), linkId: z.number().int().positive(), name: z.string(), isActive: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        const id = await updateStatisticOptionRecord(input);
+        return { success: true, id } as const;
+      }),
+    deleteStatisticOption: publicProcedure
+      .input(z.object({ id: z.number().int().positive(), linkId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        await deleteStatisticOptionRecord(input);
+        return { success: true } as const;
+      }),
+    reorderStatisticOptions: publicProcedure
+      .input(z.object({ linkId: z.number().int().positive(), optionIds: z.array(z.number().int().positive()).min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        await reorderStatisticOptions(input);
+        return { success: true } as const;
+      }),
+    getStatisticResults: publicProcedure
+      .input(z.object({ linkId: z.number().int().positive() }))
+      .query(({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        return getStatisticResults(input.linkId);
+      }),
+    searchStatisticResidents: publicProcedure
+      .input(z.object({ linkId: z.number().int().positive(), unitNumber: z.string().optional() }))
+      .query(({ ctx, input }) => {
+        requireAdmin(ctx.req.headers);
+        return searchStatisticResidents(input);
+      }),
+    submitStatisticResponse: publicProcedure
+      .input(
+        z.object({
+          linkId: z.number().int().positive(),
+          residentId: z.number().int().positive(),
+          optionId: z.number().int().positive(),
+          reason: z.string().optional().or(z.literal("")),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const session = requireAdmin(ctx.req.headers);
+        const result = await submitAdminStatisticResponse({
+          ...input,
+          reason: input.reason || undefined,
+          changedByAdminUsername: session.username,
+        });
+        return { success: true, ...result } as const;
       }),
     saveSlot: publicProcedure
       .input(
